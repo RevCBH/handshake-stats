@@ -24,6 +24,9 @@ interface HsdNode {
 
 interface Block {
     hashHex: () => string
+    prevBlock: Buffer
+    time: number
+    txs: [any]
 }
 
 interface Chain {
@@ -46,16 +49,12 @@ class Plugin {
     constructor(node: HsdNode) {
         this.node = node
         assert(typeof node.logger === 'object')
-        // this.logger = node.logger.context("stats")
-        this.logger = Logger.global.context("stats")
+        this.logger = node.logger.context("stats")
         this.chain = node.get('chain')
 
-        this.logger.open()
-        console.log('node.logger:', node.logger)
-        console.log('this.logger:', this.logger)
+        // TODO - figure out why logger output isn't working
         console.log('namebase-stats connecting to: %s', node.network)
         // this.logger.error(`namebase-stats connecting to: ${node.network}`)
-        throw null;
 
         this.db = new pg.Client({
             host: 'localhost',
@@ -71,8 +70,9 @@ class Plugin {
         await this.db.connect()
         let chain = this.node.get('chain')
         chain.on('block', (block: Block) => {
-            console.log('namebase-stats got block:', block)
-            this.db.query(`INSERT INTO blocks (hash) VALUES ('${block.hashHex()}')`)
+            console.log('namebase-stats got block', block.hashHex(), 'at time', block.time)
+            // console.log(JSON.stringify(block))
+            this.db.query(`INSERT INTO blocks (hash, prevHash, numTx, createdAt) VALUES ('${block.hashHex()}', '${block.prevBlock.toString('hex')}', ${block.txs.length}, ${block.time})`)
                 .then(_ => console.log(`namebase-stats: Inserted block ${block.hashHex()}`))
                 .catch(e => {
                     console.error(`namebase-stats: Failed to insert block ${block.hashHex()}`)

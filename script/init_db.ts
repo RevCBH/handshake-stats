@@ -3,15 +3,23 @@ import chalk = require('chalk')
 
 const argv = require('yargs')
     .command('init_db', 'Initializes or re-initalized the database for')
-    .option('nuke', {
-        description: 'Delete everything this script manages',
+    .option('drop', {
+        description: "Delete everything this script manages",
+        type: 'boolean',
+    })
+    .option('nocreate', {
+        description: "Don't create anything",
         type: 'boolean',
     })
     .argv
 
 const createBlocksTable = `
 CREATE TABLE blocks (
-    hash CHAR(64)
+    hash CHAR(64) PRIMARY KEY,
+    prevHash CHAR(64) NOT NULL,
+    createdAt integer NOT NULL,
+    -- numTx integer NOT NULL,
+    issuance biginteger NOT NULL
 );
 `
 
@@ -60,19 +68,17 @@ async function main() {
 
     }
 
-    console.log(argv)
-
     try {
-        if (argv.nuke) {
-            await client.connect()
-            console.log("Connected to database:", chalk.greenBright("OK"))
+        await client.connect()
+        console.log("Connected to database:", OK)
 
+        if (argv.drop) {
             await tryOrSkipOn("Dropping 'blocks' table", '42P01', dropBlocksTable)
             await tryOrSkipOn("Deleting `namebase-stats` role", '42704', dropServiceUser)
 
-        } else {
-            await client.connect()
-            console.log("Connected to database:", chalk.greenBright("OK"))
+        }
+
+        if (!argv.nocreate) {
 
             await tryOrSkipOn("Creating 'namebase-stats' role", '42710', createServiceUser)
             await tryOrSkipOn("Creating 'blocks' table", '42P07', createBlocksTable)
