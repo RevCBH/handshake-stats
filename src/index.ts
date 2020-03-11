@@ -1,9 +1,7 @@
 'use strict';
 
-// import hsd = require('hsd')
 import * as pg from 'pg'
 import assert from 'assert'
-const Logger = require('blgr')
 
 interface Logger {
     context: (module: string) => LoggerContext
@@ -27,16 +25,17 @@ interface Block {
     hashHex: () => string
     prevBlock: Hash
     time: number
-    txs: [Tx]
+    txs: [TX]
 }
 
 type Hash = Buffer
 
-interface Tx {
+interface TX {
     inputs: [Input]
     outputs: [Output]
     isCoinbase: () => boolean
     getOutputValue: () => number
+    getFee: (view: CoinView) => number
 }
 
 interface Input {
@@ -54,33 +53,25 @@ interface Covenant { }
 interface Chain {
     on: (msg: 'block', handler: (block: Block) => void) => void
     getBlock: (hash: Hash) => Promise<Block>
+    getBlockView: (block: Block) => Promise<CoinView>
 }
 
-// const pool = new pg.Pool({
-//     user: 'namebase-stats',
-//     host: 'localhost',
-//     database: 'postgres',
-//     password: 'test123'
-// })
+interface CoinView { }
 
-function blockIssuance(block: Block): number {
-    let total = 0;
-    block.txs.forEach(tx => {
-        if (tx.isCoinbase()) {
-            total += tx.getOutputValue();
-        }
-    })
-    return total;
+interface BlockStats {
+    issuance: number
+    fees: number
 }
 
-function blockInsertSql(block: Block): string {
+function blockInsertSql(block: Block, stats: BlockStats): string {
     return `
-        INSERT INTO blocks (hash, prevHash, createdAt, issuance) 
+        INSERT INTO blocks (hash, prevHash, createdAt, issuance, fees) 
         VALUES (
             '${block.hashHex()}', 
             '${block.prevBlock.toString('hex')}',
             ${block.time},
-            ${blockIssuance(block)}
+            ${stats.issuance},
+            ${stats.fees}
         )
     `
 }
@@ -116,7 +107,8 @@ class Plugin {
     }
 
     async insertBlock(block: Block) {
-        await this.db.query(blockInsertSql(block))
+        let stats = await this.getBlockStats(block)
+        await this.db.query(blockInsertSql(block, stats))
         let prevBlock = await this.chain.getBlock(block.prevBlock)
         if (prevBlock != null) {
             if (!await this.isBlockInDb(prevBlock)) {
@@ -131,10 +123,26 @@ class Plugin {
         console.log(`namebase-stats: Inserted block ${block.hashHex()}`)
     }
 
-    isBlockInDb(block: Block): Promise<boolean> {
-        return this.db.query(blockExistsSql(block)).then(result =>
-            result.rows[0].exists == true
-        )
+    async isBlockInDb(block: Block): Promise<boolean> {
+        let result = await this.db.query(blockExistsSql(block))
+        return result.rows[0].exists == true
+    }
+
+    async getBlockStats(block: Block): Promise<BlockStats> {
+        let view = await this.chain.getBlockView(block)
+        let issuance = 0;
+        let fees = 0;
+        block.txs.forEach(tx => {
+            if (tx.isCoinbase()) {
+                issuance += tx.getOutputValue();
+            } else {
+                fees += tx.getFee(view)
+            }
+        })
+        return {
+            issuance: issuance,
+            fees: fees
+        };
     }
 
     async open() {
@@ -142,11 +150,6 @@ class Plugin {
 
         await this.db.connect()
         console.log('namebase-stats: db connected')
-
-        // let genisisBlock = await this.chain.getBlock(Buffer.from('5b6ef2d3c1f3cdcadfd9a030ba1811efdd17740f14e166489760741d075992e0', 'hex'))
-        // console.log(genisisBlock)
-        // await this.insertBlock(genisisBlock)
-        // throw null;
 
         this.chain.on('block', (block: Block) => {
             console.log('namebase-stats got block', block.hashHex(), 'at time', block.time)

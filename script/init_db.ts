@@ -19,7 +19,8 @@ CREATE TABLE blocks (
     prevHash CHAR(64) NOT NULL,
     createdAt integer NOT NULL,
     -- numTx integer NOT NULL,
-    issuance bigint NOT NULL
+    issuance bigint NOT NULL,
+    fees bigint NOT NULL
 );
 `
 
