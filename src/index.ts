@@ -2,9 +2,17 @@
 
 // import hsd = require('hsd')
 import * as pg from 'pg'
+import assert from 'assert'
+const Logger = require('blgr')
 
 interface Logger {
+    context: (module: string) => LoggerContext
+}
+
+interface LoggerContext {
     error: (msg: string) => void
+    info: (msg: string) => void
+    open: () => void
 }
 
 interface HsdNode {
@@ -30,17 +38,24 @@ interface Chain {
 // })
 
 class Plugin {
-    logger: Logger
+    logger: LoggerContext
     db: pg.Client
     node: HsdNode
     chain: Chain
 
     constructor(node: HsdNode) {
         this.node = node
-        this.logger = node.logger
+        assert(typeof node.logger === 'object')
+        // this.logger = node.logger.context("stats")
+        this.logger = Logger.global.context("stats")
         this.chain = node.get('chain')
 
+        this.logger.open()
+        console.log('node.logger:', node.logger)
+        console.log('this.logger:', this.logger)
         console.log('namebase-stats connecting to: %s', node.network)
+        // this.logger.error(`namebase-stats connecting to: ${node.network}`)
+        throw null;
 
         this.db = new pg.Client({
             host: 'localhost',
