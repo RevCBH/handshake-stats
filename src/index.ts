@@ -16,21 +16,44 @@ interface LoggerContext {
 }
 
 interface HsdNode {
-    logger: Logger,
-    network: string,
-    get: (propname: 'chain') => Chain,
+    logger: Logger
+    network: string
+    get: (propname: 'chain') => Chain
     on: (msg: string, cb: Function) => void
 }
 
 interface Block {
+    hash: () => Hash
     hashHex: () => string
-    prevBlock: Buffer
+    prevBlock: Hash
     time: number
-    txs: [any]
+    txs: [Tx]
 }
+
+type Hash = Buffer
+
+interface Tx {
+    inputs: [Input]
+    outputs: [Output]
+    isCoinbase: () => boolean
+    getOutputValue: () => number
+}
+
+interface Input {
+}
+
+interface Output {
+    value: number
+    address: Address
+    covenant: Covenant
+}
+
+interface Address { }
+interface Covenant { }
 
 interface Chain {
     on: (msg: 'block', handler: (block: Block) => void) => void
+    getBlock: (hash: Hash) => Promise<Block>
 }
 
 // const pool = new pg.Pool({
@@ -39,6 +62,34 @@ interface Chain {
 //     database: 'postgres',
 //     password: 'test123'
 // })
+
+function blockIssuance(block: Block): number {
+    let total = 0;
+    block.txs.forEach(tx => {
+        if (tx.isCoinbase()) {
+            total += tx.getOutputValue();
+        }
+    })
+    return total;
+}
+
+function blockInsertSql(block: Block): string {
+    return `
+        INSERT INTO blocks (hash, prevHash, createdAt, issuance) 
+        VALUES (
+            '${block.hashHex()}', 
+            '${block.prevBlock.toString('hex')}',
+            ${block.time},
+            ${blockIssuance(block)}
+        )
+    `
+}
+
+function blockExistsSql(block: Block): string {
+    return `
+        SELECT EXISTS(SELECT 1 FROM blocks WHERE hash = '${block.hashHex()}');
+    `
+}
 
 class Plugin {
     logger: LoggerContext
@@ -64,23 +115,50 @@ class Plugin {
         })
     }
 
+    async insertBlock(block: Block) {
+        await this.db.query(blockInsertSql(block))
+        let prevBlock = await this.chain.getBlock(block.prevBlock)
+        if (prevBlock != null) {
+            if (!await this.isBlockInDb(prevBlock)) {
+                console.log(`namebase-stats: Inserting missing block ${block.hashHex()}`)
+                setImmediate(() => this.insertBlock(prevBlock).catch(e => {
+                    console.error(`namebase-stats: Failed to insert block ${block.hashHex()}`)
+                    console.error(e)
+                }))
+            }
+        }
+
+        console.log(`namebase-stats: Inserted block ${block.hashHex()}`)
+    }
+
+    isBlockInDb(block: Block): Promise<boolean> {
+        return this.db.query(blockExistsSql(block)).then(result =>
+            result.rows[0].exists == true
+        )
+    }
+
     async open() {
         console.log('namebase-stats open called')
 
         await this.db.connect()
-        let chain = this.node.get('chain')
-        chain.on('block', (block: Block) => {
-            console.log('namebase-stats got block', block.hashHex(), 'at time', block.time)
-            // console.log(JSON.stringify(block))
-            this.db.query(`INSERT INTO blocks (hash, prevHash, numTx, createdAt) VALUES ('${block.hashHex()}', '${block.prevBlock.toString('hex')}', ${block.txs.length}, ${block.time})`)
-                .then(_ => console.log(`namebase-stats: Inserted block ${block.hashHex()}`))
-                .catch(e => {
-                    console.error(`namebase-stats: Failed to insert block ${block.hashHex()}`)
-                    console.error(e)
-                })
-        })
+        console.log('namebase-stats: db connected')
 
-        console.log('namebase-stats db connected')
+        // let genisisBlock = await this.chain.getBlock(Buffer.from('5b6ef2d3c1f3cdcadfd9a030ba1811efdd17740f14e166489760741d075992e0', 'hex'))
+        // console.log(genisisBlock)
+        // await this.insertBlock(genisisBlock)
+        // throw null;
+
+        this.chain.on('block', (block: Block) => {
+            console.log('namebase-stats got block', block.hashHex(), 'at time', block.time)
+            this.insertBlock(block).catch(e => {
+                console.error(`namebase-stats: Failed to insert block ${block.hashHex()}`)
+                console.error(e)
+            })
+        })
+    }
+
+    async close() {
+        await this.db.end()
     }
 }
 
