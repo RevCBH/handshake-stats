@@ -63,7 +63,7 @@ class Plugin extends EventEmitter {
         return {
             hash: block.hashHex(),
             prevhash: block.prevBlock.toString('hex'),
-            time: new Date(block.time * 1000),
+            time: block.time,
             issuance: issuance,
             fees: fees
         };

@@ -1,62 +1,78 @@
-import Knex from 'knex'
 import * as api from './api'
+import { sql, DatabasePoolConnectionType, createPool, DatabasePoolType } from 'slonik';
 
 export interface BlockStats {
     hash: string
     prevhash: string
-    time: Date
+    time: number
     issuance: number
     fees: number
 }
 
 export interface Client extends api.Query {
-    insertBlockStats: (blockStats: BlockStats) => Promise<BlockStats>
+    insertBlockStats: (blockStats: BlockStats) => Promise<void>
     blockExists: (blockHash: string) => Promise<boolean>
     close: () => Promise<void>
 }
 
+type DbFunc<TArgs, TResult> = (connection: DatabasePoolConnectionType, args: TArgs) => Promise<TResult>
+
 export function init(): Client {
-    const knex = Knex({
-        client: 'pg',
-        connection: {
-            host: 'localhost',
-            user: 'namebase-stats',
-            password: 'test123',
-            database: 'postgres',
+    // TODO - make connection string configurable
+    const pool = createPool('postgres://namebase-stats:test123@localhost/postgres')
+
+    function withPool<TArgs, TResult>(f: DbFunc<TArgs, TResult>): (args: TArgs) => Promise<TResult> {
+        return (args: TArgs) => {
+            return pool.connect(connection => {
+                return f(connection, args)
+            })
         }
-    })
+    }
+
 
     return {
-        insertBlockStats: insertBlockStats(knex),
-        blockExists: blockExists(knex),
-        close: async () => knex.destroy(),
+        close: async () => pool.end(),
+        insertBlockStats: withPool(insertBlockStats),
+        blockExists: withPool(blockExists),
 
         // API queries
-        getIssuance: getIssuance(knex)
+        getIssuance: withPool(getIssuance)
     }
 }
 
-function insertBlockStats(knex: Knex) {
-    return async (blockStats: BlockStats) => {
-        return knex('blocks').insert<BlockStats>(blockStats)
-    }
+
+async function insertBlockStats(connection: DatabasePoolConnectionType, blockStats: BlockStats): Promise<void> {
+    await connection.query(sql`
+        INSERT INTO blocks (hash, prevHash, time, issuance, fees)
+        VALUES (
+            ${blockStats.hash},
+            ${blockStats.prevhash},
+            to_timestamp(${blockStats.time}),
+            ${blockStats.issuance},
+            ${blockStats.fees}
+        )
+    `)
 }
 
-function blockExists(knex: Knex) {
-    return async (blockHash: string) => {
-        return knex('blocks')
-            .select()
-            .where({ hash: blockHash })
-            .then(res => res.length > 0)
-    }
+async function blockExists(connection: DatabasePoolConnectionType, blockHash: string): Promise<boolean> {
+    const result = await connection.oneFirst(sql`
+        SELECT EXISTS(SELECT 1 FROM blocks WHERE hash = ${blockHash});
+    `)
+
+    // ISSUE - forced typing, see: https://github.com/DefinitelyTyped/DefinitelyTyped/issues/41477
+    return <boolean><unknown>result.valueOf()
 }
 
-function getIssuance(knex: Knex) {
-    return async (bucketSize: string) => {
-        return knex('blocks')
-            .select(knex.raw('time_bucket(?, time) AS label, sum(issuance - fees) AS value', bucketSize))
-            .groupBy('label')
-            .orderBy('label', 'asc')
+async function getIssuance(connection: DatabasePoolConnectionType, bucketSize: string): Promise<api.Bucket[]> {
+    const result = await connection.query(sql`
+        SELECT time_bucket(${bucketSize}, time) AS label, sum(issuance - fees) AS value
+        FROM blocks
+        GROUP BY label
+        ORDER BY label ASC
+    `)
 
-    }
+    return result.rows.map(row => {
+        let rowTime = new Date(row.label)
+        return { label: rowTime.toString(), value: <number>row.value }
+    })
 }

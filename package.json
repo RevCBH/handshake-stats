@@ -19,16 +19,17 @@
     "typescript": "^3.8.3",
     "@types/express": "^4.17.3",
     "@types/node": "^13.9.0",
-    "@types/pg": "^7.14.1"
+    "@types/pg": "^7.14.1",
+    "@types/slonik": "^22.1.1"
   },
   "dependencies": {
     "blgr": "^0.1.7",
     "chalk": "^3.0.0",
     "express": "^4.17.1",
     "hsd": "github:handshake-org/hsd",
-    "knex": "^0.20.11",
     "pg": "^7.18.2",
     "pg-native": "^3.0.0",
+    "slonik": "^22.4.3",
     "yargs": "^15.3.0"
   }
 }
