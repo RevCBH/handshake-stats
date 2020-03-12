@@ -65,11 +65,11 @@ interface BlockStats {
 
 function blockInsertSql(block: Block, stats: BlockStats): string {
     return `
-        INSERT INTO blocks (hash, prevHash, createdAt, issuance, fees) 
+        INSERT INTO blocks (hash, prevHash, time, issuance, fees)
         VALUES (
             '${block.hashHex()}', 
             '${block.prevBlock.toString('hex')}',
-            ${block.time},
+            to_timestamp(${block.time}),
             ${stats.issuance},
             ${stats.fees}
         )

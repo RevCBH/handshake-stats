@@ -15,13 +15,17 @@ const argv = require('yargs')
 
 const createBlocksTable = `
 CREATE TABLE blocks (
-    hash CHAR(64) PRIMARY KEY,
-    prevHash CHAR(64) NOT NULL,
-    createdAt integer NOT NULL,
-    -- numTx integer NOT NULL,
-    issuance bigint NOT NULL,
-    fees bigint NOT NULL
+    hash        char(64) not null,
+    prevHash    char(64) not null,
+    time        timestamp without time zone not null,
+    issuance    bigint not null,
+    fees        bigint not null
 );
+
+SELECT create_hypertable('blocks', 'time');
+
+CREATE INDEX ON blocks (hash);
+CREATE UNIQUE INDEX block_hash ON blocks (time ASC, hash);
 `
 
 const dropBlocksTable = `
@@ -35,7 +39,7 @@ CREATE ROLE "namebase-stats" NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT LOGIN P
 const dropServiceUser = `
 DROP ROLE "namebase-stats";`
 
-// TODO - narrow privileges
+// TODO - narrow privileges?
 const grantBlocksAccess = `
 GRANT ALL PRIVILEGES ON blocks TO "namebase-stats";
 `
@@ -46,8 +50,9 @@ const ERROR = chalk.redBright("ERROR")
 
 async function main() {
     const client = new Client({
-        host: '/var/run/postgresql',
+        host: 'localhost',
         user: 'postgres',
+        password: 'test123',
         database: 'postgres'
     })
 
@@ -76,15 +81,12 @@ async function main() {
         if (argv.drop) {
             await tryOrSkipOn("Dropping 'blocks' table", '42P01', dropBlocksTable)
             await tryOrSkipOn("Deleting `namebase-stats` role", '42704', dropServiceUser)
-
         }
 
         if (!argv.nocreate) {
-
             await tryOrSkipOn("Creating 'namebase-stats' role", '42710', createServiceUser)
             await tryOrSkipOn("Creating 'blocks' table", '42P07', createBlocksTable)
             await tryOrSkipOn("Granting access 'blocks'", '', grantBlocksAccess)
-
         }
     }
     catch (e) {

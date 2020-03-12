@@ -6,7 +6,10 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",
-    "init-db": "ts-node script/init_db.ts"
+    "init-db": "ts-node script/init_db.ts",
+    "docker-pull-db": "docker pull timescale/timescaledb:latest-pg11",
+    "docker-run-db": "docker run -d --name timescaledb -p 5432:5432 -e POSTGRES_PASSWORD=test123 timescale/timescaledb:latest-pg11",
+    "docker-psql": "docker exec -it timescaledb psql -h localhost -U postgres"
   },
   "keywords": [],
   "author": "",
