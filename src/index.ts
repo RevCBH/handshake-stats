@@ -2,68 +2,18 @@
 
 import * as pg from 'pg'
 import assert from 'assert'
+import * as api from './api'
+import * as hsd from './hsd_types'
+import { EventEmitter } from 'events';
+import * as http from 'http'
 
-interface Logger {
-    context: (module: string) => LoggerContext
-}
-
-interface LoggerContext {
-    error: (msg: string) => void
-    info: (msg: string) => void
-    open: () => void
-}
-
-interface HsdNode {
-    logger: Logger
-    network: string
-    get: (propname: 'chain') => Chain
-    on: (msg: string, cb: Function) => void
-}
-
-interface Block {
-    hash: () => Hash
-    hashHex: () => string
-    prevBlock: Hash
-    time: number
-    txs: [TX]
-}
-
-type Hash = Buffer
-
-interface TX {
-    inputs: [Input]
-    outputs: [Output]
-    isCoinbase: () => boolean
-    getOutputValue: () => number
-    getFee: (view: CoinView) => number
-}
-
-interface Input {
-}
-
-interface Output {
-    value: number
-    address: Address
-    covenant: Covenant
-}
-
-interface Address { }
-interface Covenant { }
-
-interface Chain {
-    on: (msg: 'block', handler: (block: Block) => void) => void
-    getBlock: (hash: Hash) => Promise<Block>
-    getBlockView: (block: Block) => Promise<CoinView>
-}
-
-interface CoinView { }
 
 interface BlockStats {
     issuance: number
     fees: number
 }
 
-function blockInsertSql(block: Block, stats: BlockStats): string {
+function blockInsertSql(block: hsd.Block, stats: BlockStats): string {
     return `
         INSERT INTO blocks (hash, prevHash, time, issuance, fees)
         VALUES (
@@ -76,19 +26,22 @@ function blockInsertSql(block: Block, stats: BlockStats): string {
     `
 }
 
-function blockExistsSql(block: Block): string {
+function blockExistsSql(block: hsd.Block): string {
     return `
         SELECT EXISTS(SELECT 1 FROM blocks WHERE hash = '${block.hashHex()}');
     `
 }
 
-class Plugin {
-    logger: LoggerContext
+class Plugin extends EventEmitter implements api.Query {
+    logger: hsd.LoggerContext
     db: pg.Client
-    node: HsdNode
-    chain: Chain
+    node: hsd.Node
+    chain: hsd.Chain
+    httpServer: http.Server | undefined
 
-    constructor(node: HsdNode) {
+    constructor(node: hsd.Node) {
+        super();
+
         this.node = node
         assert(typeof node.logger === 'object')
         this.logger = node.logger.context("stats")
@@ -106,7 +59,7 @@ class Plugin {
         })
     }
 
-    async insertBlock(block: Block) {
+    async insertBlock(block: hsd.Block) {
         let stats = await this.getBlockStats(block)
         await this.db.query(blockInsertSql(block, stats))
         let prevBlock = await this.chain.getBlock(block.prevBlock)
@@ -114,6 +67,7 @@ class Plugin {
             if (!await this.isBlockInDb(prevBlock)) {
                 console.log(`namebase-stats: Inserting missing block ${block.hashHex()}`)
                 setImmediate(() => this.insertBlock(prevBlock).catch(e => {
+                    this.emit('error', `namebase-stats: Failed to insert block ${block.hashHex()}`)
                     console.error(`namebase-stats: Failed to insert block ${block.hashHex()}`)
                     console.error(e)
                 }))
@@ -123,12 +77,12 @@ class Plugin {
         console.log(`namebase-stats: Inserted block ${block.hashHex()}`)
     }
 
-    async isBlockInDb(block: Block): Promise<boolean> {
+    async isBlockInDb(block: hsd.Block): Promise<boolean> {
         let result = await this.db.query(blockExistsSql(block))
         return result.rows[0].exists == true
     }
 
-    async getBlockStats(block: Block): Promise<BlockStats> {
+    async getBlockStats(block: hsd.Block): Promise<BlockStats> {
         let view = await this.chain.getBlockView(block)
         let issuance = 0;
         let fees = 0;
@@ -151,22 +105,38 @@ class Plugin {
         await this.db.connect()
         console.log('namebase-stats: db connected')
 
-        this.chain.on('block', (block: Block) => {
+        this.chain.on('block', (block: hsd.Block) => {
             console.log('namebase-stats got block', block.hashHex(), 'at time', block.time)
             this.insertBlock(block).catch(e => {
                 console.error(`namebase-stats: Failed to insert block ${block.hashHex()}`)
                 console.error(e)
             })
         })
+
+        // TODO - make port configurable
+        this.httpServer = api.init(this).listen(8080)
     }
 
     async close() {
+        await this.httpServer?.close();
         await this.db.end()
+    }
+
+    async getIssuance(bucketSize: string): Promise<api.Bucket[]> {
+        let result = await this.db.query(`
+            SELECT time_bucket('${bucketSize}', time) AS label, sum(issuance - fees) AS value
+            FROM blocks
+            GROUP BY label
+            ORDER BY label ASC
+        `)
+        return result.rows.map(r => {
+            return new api.Bucket(r.label, r.value)
+        })
     }
 }
 
 export const id = 'namebase-stats'
 
-export function init(node: HsdNode) {
+export function init(node: hsd.Node) {
     return new Plugin(node);
 }
