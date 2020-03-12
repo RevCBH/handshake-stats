@@ -17,9 +17,6 @@ export interface Query {
     getIssuance: (bucketSize: string) => Promise<Bucket[]>
 }
 
-const bucketSizeRegexp = /^[1-9][0-9]* (minute|minutes|hour|hours|day|days)$/
-const limitRegexp = /^[1-9][0-9]*$/
-
 export function init(query: Query): Express {
     let app = express()
 
@@ -31,10 +28,6 @@ export function init(query: Query): Express {
 
     app.get('/stats/issuance', handleErrors(async (req, res) => {
         let bucketSize = req.query.bucketSize || '1 hour'
-        // let limit = req.query.limit || '100'
-        assert(bucketSizeRegexp.test(bucketSize))
-        // assert(limitRegexp.test(limit))
-
         let buckets = await query.getIssuance(bucketSize)
 
         res.contentType('application/json')
