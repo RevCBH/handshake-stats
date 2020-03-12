@@ -37,7 +37,7 @@ export function init(): Client {
         blockExists: withPool(blockExists),
 
         // API queries
-        getIssuance: withPool(getIssuance)
+        timeseries: withPool(timeseries)
     }
 }
 
@@ -66,10 +66,36 @@ async function blockExists(connection: DatabasePoolConnectionType, blockHash: st
     return <boolean><unknown>result.valueOf()
 }
 
-async function getIssuance(connection: DatabasePoolConnectionType, bucketSize: string): Promise<api.Bucket[]> {
+async function timeseries(connection: DatabasePoolConnectionType, params: api.TimeseriesParams): Promise<api.Bucket[]> {
+    var operation = sql``;
+    var series = sql``
+    switch (params.series) {
+        case 'issuance':
+            series = sql`issuance - fees`
+            break
+        case 'num-airdrops':
+            series = sql`numAirdrops`
+            break
+        case 'airdrops':
+            series = sql`airdropAmt`
+            break
+        default:
+            throw new Error(`Invalid timeseries: ${params.series}`)
+    }
+
+    switch (params.operation) {
+        case 'avg':
+            operation = sql`avg(${series})`
+            break
+        case 'sum':
+            operation = sql`sum(${series})`
+            break
+        default:
+            throw new Error(`Invalid timeseries operation: ${params.operation} `)
+    }
 
     const result = await connection.query(sql`
-        SELECT time_bucket(${bucketSize}, time) AS label, sum(issuance - fees) AS value
+        SELECT time_bucket(${ params.bucketSize}, time) AS label, ${operation} AS value
         FROM blocks
         GROUP BY label
         ORDER BY label ASC

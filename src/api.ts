@@ -1,7 +1,6 @@
 'use strict';
 
-import assert from 'assert'
-import express, { Express, Request, Response } from 'express'
+import express, { Express } from 'express'
 
 export class Bucket {
     label: string
@@ -13,26 +12,30 @@ export class Bucket {
     }
 }
 
+export interface TimeseriesParams {
+    series: string
+    operation: string
+    bucketSize: string
+}
+
 export interface Query {
-    getIssuance: (bucketSize: string) => Promise<Bucket[]>
+    timeseries: (options: TimeseriesParams) => Promise<Bucket[]>
 }
 
 export function init(query: Query): Express {
-    let app = express()
-
     function handleErrors(handler: express.RequestHandler): express.RequestHandler {
         return (req, res, next) => {
             handler(req, res, next).catch(next)
         }
     }
 
-    app.get('/stats/issuance', handleErrors(async (req, res) => {
-        let bucketSize = req.query.bucketSize || '1 hour'
-        let buckets = await query.getIssuance(bucketSize)
-
-        res.contentType('application/json')
-        res.send(buckets)
-    }))
-
-    return app
+    return express()
+        .get('/timeseries/:series/:operation', handleErrors(async (req, res) => {
+            res.contentType('application/json')
+            res.send(await query.timeseries({
+                series: req.params.series,
+                operation: req.params.operation,
+                bucketSize: req.query.bucketSize || '1 hour'
+            }))
+        }))
 }
