@@ -10,14 +10,20 @@ export interface LoggerContext {
 
 export interface Node {
     logger: Logger
-    network: string
+    network: Network
     get: (propname: 'chain') => Chain
     on: (msg: string, cb: Function) => void
+}
+
+export interface Network {
+    halvingInterval: number
+    toString: () => string
 }
 
 export interface Block {
     hash: () => Hash
     hashHex: () => string
+    getCoinbaseHeight: () => number
     prevBlock: Hash
     time: number
     txs: [TX]

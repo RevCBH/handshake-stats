@@ -7,6 +7,8 @@ export interface BlockStats {
     time: number
     issuance: number
     fees: number
+    numAirdrops: number
+    airdropAmt: number
 }
 
 export interface Client extends api.Query {
@@ -29,7 +31,6 @@ export function init(): Client {
         }
     }
 
-
     return {
         close: async () => pool.end(),
         insertBlockStats: withPool(insertBlockStats),
@@ -43,13 +44,15 @@ export function init(): Client {
 
 async function insertBlockStats(connection: DatabasePoolConnectionType, blockStats: BlockStats): Promise<void> {
     await connection.query(sql`
-        INSERT INTO blocks (hash, prevHash, time, issuance, fees)
+        INSERT INTO blocks (hash, prevHash, time, issuance, fees, numAirdrops, airdropAmt)
         VALUES (
             ${blockStats.hash},
             ${blockStats.prevhash},
             to_timestamp(${blockStats.time}),
             ${blockStats.issuance},
-            ${blockStats.fees}
+            ${blockStats.fees},
+            ${blockStats.numAirdrops},
+            ${blockStats.airdropAmt}
         )
     `)
 }
@@ -64,6 +67,7 @@ async function blockExists(connection: DatabasePoolConnectionType, blockHash: st
 }
 
 async function getIssuance(connection: DatabasePoolConnectionType, bucketSize: string): Promise<api.Bucket[]> {
+
     const result = await connection.query(sql`
         SELECT time_bucket(${bucketSize}, time) AS label, sum(issuance - fees) AS value
         FROM blocks

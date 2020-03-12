@@ -7,6 +7,7 @@ import * as hsd from './hsd_types'
 import { EventEmitter } from 'events';
 import * as http from 'http'
 import * as db from './db'
+const consensus = require("hsd/lib/protocol/consensus");
 
 class Plugin extends EventEmitter {
     logger: hsd.LoggerContext
@@ -33,6 +34,7 @@ class Plugin extends EventEmitter {
     async insertBlock(block: hsd.Block) {
         let stats = await this.getBlockStats(block)
         await this.db.insertBlockStats(stats)
+
         let prevBlock = await this.chain.getBlock(block.prevBlock)
         if (prevBlock != null) {
             if (!await this.db.blockExists(prevBlock.hashHex())) {
@@ -49,24 +51,34 @@ class Plugin extends EventEmitter {
     }
 
     async getBlockStats(block: hsd.Block): Promise<db.BlockStats> {
-        let view = await this.chain.getBlockView(block)
-        let issuance = 0;
-        let fees = 0;
-        block.txs.forEach(tx => {
-            if (tx.isCoinbase()) {
-                issuance += tx.getOutputValue();
-            } else {
-                fees += tx.getFee(view)
-            }
-        })
 
-        return {
+        let view = await this.chain.getBlockView(block)
+        let result = {
             hash: block.hashHex(),
             prevhash: block.prevBlock.toString('hex'),
             time: block.time,
-            issuance: issuance,
-            fees: fees
-        };
+            issuance: 0,
+            fees: 0,
+            numAirdrops: 0,
+            airdropAmt: 0
+
+        }
+
+        result.fees =
+            block.txs[0].outputs[0].value - consensus.getReward(block.getCoinbaseHeight(), this.node.network.halvingInterval)
+
+        block.txs.forEach(tx => {
+            if (tx.isCoinbase()) {
+                result.issuance += tx.getOutputValue()
+
+                tx.outputs.slice(1).forEach(output => {
+                    result.numAirdrops += 1
+                    result.airdropAmt += output.value
+                })
+            }
+        })
+
+        return result;
     }
 
     async open() {

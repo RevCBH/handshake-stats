@@ -15,11 +15,13 @@ const argv = require('yargs')
 
 const createBlocksTable = `
 CREATE TABLE blocks (
-    hash        char(64) not null,
-    prevHash    char(64) not null,
-    time        timestamp without time zone not null,
-    issuance    bigint not null,
-    fees        bigint not null
+    hash            char(64) not null,
+    prevHash        char(64) not null,
+    time            timestamp without time zone not null,
+    issuance        bigint not null,
+    fees            bigint not null,
+    numAirdrops     int not null,
+    airdropAmt      bigint not null
 );
 
 SELECT create_hypertable('blocks', 'time');
