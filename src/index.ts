@@ -7,7 +7,7 @@ import * as hsd from './hsd_types'
 import { EventEmitter } from 'events';
 import * as http from 'http'
 import * as db from './db'
-const consensus = require("hsd/lib/protocol/consensus");
+const consensus = require("hsd/lib/protocol/consensus")
 
 class Plugin extends EventEmitter {
     logger: hsd.LoggerContext
@@ -60,8 +60,8 @@ class Plugin extends EventEmitter {
             issuance: 0,
             fees: 0,
             numAirdrops: 0,
-            airdropAmt: 0
-
+            airdropAmt: 0,
+            opens: 0
         }
 
         result.fees =
@@ -74,6 +74,12 @@ class Plugin extends EventEmitter {
                 tx.outputs.slice(1).forEach(output => {
                     result.numAirdrops += 1
                     result.airdropAmt += output.value
+                })
+            } else {
+                tx.outputs.forEach(output => {
+                    if (output.covenant.isOpen()) {
+                        result.opens += 1
+                    }
                 })
             }
         })

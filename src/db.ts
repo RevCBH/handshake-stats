@@ -9,6 +9,7 @@ export interface BlockStats {
     fees: number
     numAirdrops: number
     airdropAmt: number
+    opens: number
 }
 
 export interface Client extends api.Query {
@@ -44,7 +45,7 @@ export function init(): Client {
 
 async function insertBlockStats(connection: DatabasePoolConnectionType, blockStats: BlockStats): Promise<void> {
     await connection.query(sql`
-        INSERT INTO blocks (hash, prevHash, time, issuance, fees, numAirdrops, airdropAmt)
+        INSERT INTO blocks (hash, prevHash, time, issuance, fees, numAirdrops, airdropAmt, opens)
         VALUES (
             ${blockStats.hash},
             ${blockStats.prevhash},
@@ -52,7 +53,8 @@ async function insertBlockStats(connection: DatabasePoolConnectionType, blockSta
             ${blockStats.issuance},
             ${blockStats.fees},
             ${blockStats.numAirdrops},
-            ${blockStats.airdropAmt}
+            ${blockStats.airdropAmt},
+            ${blockStats.opens}
         )
     `)
 }
@@ -78,6 +80,12 @@ async function timeseries(connection: DatabasePoolConnectionType, params: api.Ti
             break
         case 'airdrops':
             series = sql`airdropAmt`
+            break
+        case 'num-blocks':
+            series = sql`1`
+            break
+        case 'opens':
+            series = sql`opens`
             break
         default:
             throw new Error(`Invalid timeseries: ${params.series}`)

@@ -49,7 +49,9 @@ export interface Output {
 }
 
 export interface Address { }
-export interface Covenant { }
+export interface Covenant {
+    isOpen: () => boolean
+}
 
 export interface Chain {
     on: (msg: 'block', handler: (block: Block) => void) => void

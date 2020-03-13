@@ -21,6 +21,7 @@ CREATE TABLE blocks (
     issuance        bigint not null,
     fees            bigint not null,
     numAirdrops     int not null,
+    opens           int not null,
     airdropAmt      bigint not null
 );
 
