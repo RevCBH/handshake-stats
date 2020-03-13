@@ -35,6 +35,9 @@ class Plugin extends EventEmitter {
         let stats = await this.getBlockStats(block)
         this.db.insertBlockStats(stats)
 
+        // TODO - this ends up being a mess w/ the block ingest queue and
+        //        computations that depend on previous results. We need to
+        //        support a rescan operation, probably
         // let prevBlock = await this.chain.getBlock(block.prevBlock)
         // if (prevBlock != null) {
         //     if (!await this.db.blockExists(prevBlock.hashHex())) {
@@ -61,31 +64,12 @@ class Plugin extends EventEmitter {
             fees: 0,
             numAirdrops: 0,
             airdropAmt: 0,
-            // opens: [],
             numopens: 0,
             numrunning: 0
         }
     }
 
-    getOpenStats(block: hsd.Block) {
-        let results: db.OpenStats[] = []
-        block.txs.forEach(tx => {
-            tx.outputs.filter(o => o.covenant.isOpen())
-                .forEach(o => {
-                    let name = o.covenant.items[2]
-                    if (Buffer.isBuffer(name)) {
-                        name = name.toString('ascii')
-                    }
-                    results.push({ name: name })
-                })
-        })
-
-        return results
-    }
-
     async getBlockStats(block: hsd.Block): Promise<db.BlockStats> {
-
-        // let view = await this.chain.getBlockView(block)
         let stats = await this.basicBlockStats(block)
 
         stats.fees =
@@ -103,27 +87,10 @@ class Plugin extends EventEmitter {
                 tx.outputs.forEach(output => {
                     if (output.covenant.isOpen()) {
                         stats.numopens += 1
-                        // let name = output.covenant.items[2]
-                        // if (Buffer.isBuffer(name)) {
-                        //     name = name.toString('ascii')
-                        // }
-                        // stats.opens.push({
-                        //     name: name
-                        // })
                     }
                 })
             }
         })
-
-        // console.log("namebase-stats current block opens:", stats.opens)
-        // let expiringEntry = await this.chain.getEntryByHeight(stats.height - NUM_BLOCKS_AUCTION_IS_OPEN)
-        // if (expiringEntry !== null) {
-        //     let expiringAuctionsBlock = await this.chain.getBlock(expiringEntry.hash)
-        //     // TODO - unify with logic above, cleanup
-        //     let closingAuctions = this.getOpenStats(expiringAuctionsBlock)
-        //     stats.numcloses = closingAuctions.length
-        //     console.log("namebase-stats current block closes:", closingAuctions)
-        // }
 
         return stats;
     }

@@ -32,12 +32,10 @@ export interface Client extends api.Query {
 }
 
 // type DbFunc<TArgs, TResult> = (connection: DatabasePoolConnectionType, args: TArgs) => Promise<TResult>
-
 class DbRunner implements Client {
     pool: DatabasePoolType
 
-    // to ensure ordered insertion, we work off a queue and use the
-    // presence of insertExecutor as a lock
+    // to ensure ordered insertion, we work off a queue
     blockQueue: BlockStats[]
     insertExecutor: Promise<void> | null
 
@@ -47,7 +45,7 @@ class DbRunner implements Client {
         this.pool = createPool('postgres://namebase-stats:test123@localhost/postgres')
     }
 
-    // This takes an item 
+    // This burns through the queue until it's empty
     private async startWork(): Promise<void> {
         var item: BlockStats | undefined
         while (item = this.blockQueue.shift()) {
@@ -87,9 +85,6 @@ class DbRunner implements Client {
         if (this.insertExecutor === null) {
             this.insertExecutor = this.startWork()
         }
-
-        // Return a promise that resolves when the queue is empty
-        // TODO - does this need to be more granular?
     }
 }
 
@@ -97,43 +92,7 @@ export function init(): Client {
     return new DbRunner();
 }
 
-// export function init(): Client {
-//     // TODO - make connection string configurable
-//     const pool = createPool('postgres://namebase-stats:test123@localhost/postgres')
-
-//     function withConnection<TArgs, TResult>(f: DbFunc<TArgs, TResult>): (args: TArgs) => Promise<TResult> {
-//         return (args: TArgs) => {
-//             return pool.connect(connection => {
-//                 return f(connection, args)
-//             })
-//         }
-//     }
-
-//     return {
-//         // close: async () => pool.end(),
-//         insertBlockStats: (args) => insertBlockStats(pool, args),
-//         blockExists: withConnection(blockExists),
-
-//         // API queries
-//         timeseries: withConnection(timeseries)
-//     }
-// }
-
 async function insertBlockStats(pool: DatabasePoolType, blockStats: BlockStats): Promise<void> {
-    // await pool.transaction(async txConnection => {
-    //     // Insert new auctions
-    //     for (let i = 0; i < blockStats.opens.length; i++) {
-    //         const open = blockStats.opens[i]
-    //         await txConnection.query(sql`
-    //             INSERT INTO auctions (name, fromblock)
-    //             VALUES (
-    //                 ${open.name},
-    //                 ${blockStats.height}
-    //             )
-    //         `)
-    //     }
-    // })
-
     await pool.transaction(async txConnection => {
         // Calculate running auctions at this block
         // TODO - consider doing this from chain data instead?
@@ -145,25 +104,16 @@ async function insertBlockStats(pool: DatabasePoolType, blockStats: BlockStats):
             SELECT numopens FROM blocks WHERE height = ${blockStats.height - NUM_BLOCKS_AUCTION_IS_OPEN};
         `)
 
-        console.log(`##### lastNumRunning:`, lastNumRunning)
         if (lastNumRunning != null) {
             blockStats.numrunning = lastNumRunning.numrunning;
         }
 
         if (expiring != null) {
-            console.log(`##### expiring:`, expiring)
+
             blockStats.numrunning -= expiring.numopens
         }
-
-        console.log("##### blockStats.numopens:", blockStats.numopens)
         blockStats.numrunning += blockStats.numopens
-
-        console.log(`##### numrunning at ${blockStats.height}:`, blockStats.numrunning)
-
-        // let numrunning = await txConnection.one<{ count: number }>(sql`
-        //     SELECT count(1) FROM auctions WHERE fromblock > ${blockStats.height} - 2197 AND fromblock <= ${blockStats.height};
-        // `)
-        // console.log(`##### numrunning at ${blockStats.height}:`, numrunning)
+        console.log(`namebase-stats numrunning at ${blockStats.height}:`, blockStats.numrunning)
 
         // Insert the full
         try {
@@ -184,19 +134,10 @@ async function insertBlockStats(pool: DatabasePoolType, blockStats: BlockStats):
         `)
         }
         catch (e) {
-            console.log("!!!!! error inserting:", e)
+            console.log("namebase-stats error inserting:", e)
         }
     })
 }
-
-// async function blockExists(connection: DatabasePoolConnectionType, blockHash: string): Promise<boolean> {
-//     const result = await connection.oneFirst(sql`
-//         SELECT EXISTS(SELECT 1 FROM blocks WHERE hash = ${blockHash});
-//     `)
-
-//     // ISSUE - forced typing, see: https://github.com/DefinitelyTyped/DefinitelyTyped/issues/41477
-//     return <boolean><unknown>result.valueOf()
-// }
 
 async function timeseries(connection: DatabasePoolConnectionType, params: api.TimeseriesParams): Promise<api.Bucket[]> {
     var operation = sql``;
@@ -215,7 +156,10 @@ async function timeseries(connection: DatabasePoolConnectionType, params: api.Ti
             series = sql`1`
             break
         case 'opens':
-            series = sql`opens`
+            series = sql`numopens`
+            break
+        case 'running-auctions':
+            series = sql`numrunning`
             break
         default:
             throw new Error(`Invalid timeseries: ${params.series}`)
