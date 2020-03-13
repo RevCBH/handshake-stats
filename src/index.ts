@@ -53,7 +53,7 @@ class Plugin extends EventEmitter {
         console.log(`namebase-stats: Inserted block ${block.hashHex()}`)
     }
 
-    async basicBlockStats(block: hsd.Block): Promise<db.BlockStats> {
+    async basicBlockStats(block: hsd.Block): Promise<api.BlockStats> {
         let height = await this.chain.getHeight(block.hash())
         return {
             hash: block.hashHex(),
@@ -69,7 +69,7 @@ class Plugin extends EventEmitter {
         }
     }
 
-    async getBlockStats(block: hsd.Block): Promise<db.BlockStats> {
+    async getBlockStats(block: hsd.Block): Promise<api.BlockStats> {
         let stats = await this.basicBlockStats(block)
 
         stats.fees =

@@ -1,32 +1,15 @@
 import * as api from './api'
 import { sql, DatabasePoolConnectionType, createPool, DatabasePoolType } from 'slonik';
-import { Block } from './hsd_types';
-import { Stats } from 'fs';
-import { Pool } from 'pg';
 
 export interface OpenStats {
     name: string
-}
-
-export interface BlockStats {
-    hash: string
-    prevhash: string
-    time: number
-    height: number
-    issuance: number
-    fees: number
-    numAirdrops: number
-    airdropAmt: number
-    numopens: number
-    // numcloses: number
-    numrunning: number
 }
 
 // TODO - verify this math is correct
 export const NUM_BLOCKS_AUCTION_IS_OPEN = 37 + 720 + 1440 // opening, bidding, revealing
 
 export interface Client extends api.Query {
-    insertBlockStats: (blockStats: BlockStats) => void
+    insertBlockStats: (blockStats: api.BlockStats) => void
     blockExists: (blockHash: string) => Promise<boolean>
     close: () => Promise<void>
 }
@@ -36,7 +19,7 @@ class DbRunner implements Client {
     pool: DatabasePoolType
 
     // to ensure ordered insertion, we work off a queue
-    blockQueue: BlockStats[]
+    blockQueue: api.BlockStats[]
     insertExecutor: Promise<void> | null
 
     constructor() {
@@ -47,7 +30,7 @@ class DbRunner implements Client {
 
     // This burns through the queue until it's empty
     private async startWork(): Promise<void> {
-        var item: BlockStats | undefined
+        var item: api.BlockStats | undefined
         while (item = this.blockQueue.shift()) {
             await insertBlockStats(this.pool, item)
         }
@@ -73,10 +56,42 @@ class DbRunner implements Client {
         })
     }
 
+    async getBlockStatsByHeight(height: number): Promise<api.BlockStats> {
+        return this.pool.connect(async connection => {
+            let maybeStats = await connection.maybeOne<api.BlockStats>(sql`
+                SELECT * FROM blocks
+                WHERE height = ${height}
+            `)
+
+            if (maybeStats !== null) {
+                return maybeStats
+            }
+            else {
+                throw new Error(`No block at height: ${height}`)
+            }
+        })
+    }
+
+    async getBlockStatsByHash(hash: string): Promise<api.BlockStats> {
+        return this.pool.connect(async connection => {
+            let maybeStats = await connection.maybeOne<api.BlockStats>(sql`
+                SELECT * FROM blocks
+                WHERE hash = ${hash}
+            `)
+
+            if (maybeStats !== null) {
+                return maybeStats
+            }
+            else {
+                throw new Error(`No block at hash: ${hash}`)
+            }
+        })
+    }
+
     // This queues blocks to insert 1 at a time and avoid races
     // since we want to compute stats based on previous blocks
     // and that fails if it's not inserted yet
-    insertBlockStats(blockStats: BlockStats) {
+    insertBlockStats(blockStats: api.BlockStats) {
 
         // Queue a block to insert 
         this.blockQueue.push(blockStats)
@@ -92,7 +107,7 @@ export function init(): Client {
     return new DbRunner();
 }
 
-async function insertBlockStats(pool: DatabasePoolType, blockStats: BlockStats): Promise<void> {
+async function insertBlockStats(pool: DatabasePoolType, blockStats: api.BlockStats): Promise<void> {
     await pool.transaction(async txConnection => {
         // Calculate running auctions at this block
         // TODO - consider doing this from chain data instead?

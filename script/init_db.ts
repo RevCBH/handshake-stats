@@ -13,6 +13,7 @@ const argv = require('yargs')
     })
     .argv
 
+// TODO - make issuance -> blockreward and compute rest
 const createBlocksTable = `
 CREATE TABLE blocks (
     time            timestamp without time zone not null,
