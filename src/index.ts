@@ -33,58 +33,99 @@ class Plugin extends EventEmitter {
 
     async insertBlock(block: hsd.Block) {
         let stats = await this.getBlockStats(block)
-        await this.db.insertBlockStats(stats)
+        this.db.insertBlockStats(stats)
 
-        let prevBlock = await this.chain.getBlock(block.prevBlock)
-        if (prevBlock != null) {
-            if (!await this.db.blockExists(prevBlock.hashHex())) {
-                console.log(`namebase-stats: Inserting missing block ${block.hashHex()}`)
-                setImmediate(() => this.insertBlock(prevBlock).catch(e => {
-                    this.emit('error', `namebase-stats: Failed to insert block ${block.hashHex()}`)
-                    console.error(`namebase-stats: Failed to insert block ${block.hashHex()}`)
-                    console.error(e)
-                }))
-            }
-        }
+        // let prevBlock = await this.chain.getBlock(block.prevBlock)
+        // if (prevBlock != null) {
+        //     if (!await this.db.blockExists(prevBlock.hashHex())) {
+        //         console.log(`namebase-stats: Inserting missing block ${block.hashHex()}`)
+        //         setImmediate(() => this.insertBlock(prevBlock).catch(e => {
+        //             this.emit('error', `namebase-stats: Failed to insert block ${block.hashHex()}`)
+        //             console.error(`namebase-stats: Failed to insert block ${block.hashHex()}`)
+        //             console.error(e)
+        //         }))
+        //     }
+        // }
 
         console.log(`namebase-stats: Inserted block ${block.hashHex()}`)
     }
 
-    async getBlockStats(block: hsd.Block): Promise<db.BlockStats> {
-
-        let view = await this.chain.getBlockView(block)
-        let result = {
+    async basicBlockStats(block: hsd.Block): Promise<db.BlockStats> {
+        let height = await this.chain.getHeight(block.hash())
+        return {
             hash: block.hashHex(),
             prevhash: block.prevBlock.toString('hex'),
             time: block.time,
+            height: height,
             issuance: 0,
             fees: 0,
             numAirdrops: 0,
             airdropAmt: 0,
-            opens: 0
+            // opens: [],
+            numopens: 0,
+            numrunning: 0
         }
+    }
 
-        result.fees =
-            block.txs[0].outputs[0].value - consensus.getReward(block.getCoinbaseHeight(), this.node.network.halvingInterval)
+    getOpenStats(block: hsd.Block) {
+        let results: db.OpenStats[] = []
+        block.txs.forEach(tx => {
+            tx.outputs.filter(o => o.covenant.isOpen())
+                .forEach(o => {
+                    let name = o.covenant.items[2]
+                    if (Buffer.isBuffer(name)) {
+                        name = name.toString('ascii')
+                    }
+                    results.push({ name: name })
+                })
+        })
+
+        return results
+    }
+
+    async getBlockStats(block: hsd.Block): Promise<db.BlockStats> {
+
+        // let view = await this.chain.getBlockView(block)
+        let stats = await this.basicBlockStats(block)
+
+        stats.fees =
+            block.txs[0].outputs[0].value - consensus.getReward(stats.height, this.node.network.halvingInterval)
 
         block.txs.forEach(tx => {
             if (tx.isCoinbase()) {
-                result.issuance += tx.getOutputValue()
+                stats.issuance += tx.getOutputValue()
 
                 tx.outputs.slice(1).forEach(output => {
-                    result.numAirdrops += 1
-                    result.airdropAmt += output.value
+                    stats.numAirdrops += 1
+                    stats.airdropAmt += output.value
                 })
             } else {
                 tx.outputs.forEach(output => {
                     if (output.covenant.isOpen()) {
-                        result.opens += 1
+                        stats.numopens += 1
+                        // let name = output.covenant.items[2]
+                        // if (Buffer.isBuffer(name)) {
+                        //     name = name.toString('ascii')
+                        // }
+                        // stats.opens.push({
+                        //     name: name
+                        // })
                     }
                 })
             }
         })
 
-        return result;
+        // console.log("namebase-stats current block opens:", stats.opens)
+        // let expiringEntry = await this.chain.getEntryByHeight(stats.height - NUM_BLOCKS_AUCTION_IS_OPEN)
+        // if (expiringEntry !== null) {
+        //     let expiringAuctionsBlock = await this.chain.getBlock(expiringEntry.hash)
+        //     // TODO - unify with logic above, cleanup
+        //     let closingAuctions = this.getOpenStats(expiringAuctionsBlock)
+        //     stats.numcloses = closingAuctions.length
+        //     console.log("namebase-stats current block closes:", closingAuctions)
+        // }
+
+        return stats;
     }
 
     async open() {

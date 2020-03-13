@@ -51,12 +51,19 @@ export interface Output {
 export interface Address { }
 export interface Covenant {
     isOpen: () => boolean
+    items: any[]
 }
 
 export interface Chain {
     on: (msg: 'block', handler: (block: Block) => void) => void
     getBlock: (hash: Hash) => Promise<Block>
     getBlockView: (block: Block) => Promise<CoinView>
+    getEntryByHeight: (height: number) => Promise<ChainEntry>
+    getHeight: (block: Hash) => number
 }
 
 export interface CoinView { }
+
+export interface ChainEntry {
+    hash: Hash
+}

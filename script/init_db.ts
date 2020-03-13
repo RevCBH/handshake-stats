@@ -15,14 +15,16 @@ const argv = require('yargs')
 
 const createBlocksTable = `
 CREATE TABLE blocks (
-    hash            char(64) not null,
-    prevHash        char(64) not null,
     time            timestamp without time zone not null,
+    hash            char(64) not null,
+    prevhash        char(64) not null,
+    height          bigint not null,
     issuance        bigint not null,
     fees            bigint not null,
-    numAirdrops     int not null,
-    opens           int not null,
-    airdropAmt      bigint not null
+    numairdrops     int not null,
+    airdropamt      bigint not null,
+    numopens        int not null,
+    numrunning      int not null
 );
 
 SELECT create_hypertable('blocks', 'time');
@@ -31,9 +33,16 @@ CREATE INDEX ON blocks (hash);
 CREATE UNIQUE INDEX block_hash ON blocks (time ASC, hash);
 `
 
-const dropBlocksTable = `
-DROP TABLE blocks;
+const createAuctionsTable = `
+CREATE TABLE auctions (
+    name        varchar(255) not null,
+    fromblock   bigint not null
+);
+
+CREATE INDEX ON auctions (fromblock);
 `
+
+function dropTable(name: string): string { return `DROP TABLE "${name}";` }
 
 const createServiceUser = `
 CREATE ROLE "namebase-stats" NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT LOGIN PASSWORD 'test123';
@@ -43,8 +52,9 @@ const dropServiceUser = `
 DROP ROLE "namebase-stats";`
 
 // TODO - narrow privileges?
-const grantBlocksAccess = `
+const grantAccess = `
 GRANT ALL PRIVILEGES ON blocks TO "namebase-stats";
+GRANT ALL PRIVILEGES ON auctions TO "namebase-stats";
 `
 
 const OK = chalk.greenBright("OK")
@@ -82,14 +92,17 @@ async function main() {
         console.log("Connected to database:", OK)
 
         if (argv.drop) {
-            await tryOrSkipOn("Dropping 'blocks' table", '42P01', dropBlocksTable)
+            await tryOrSkipOn("Dropping 'auctions' table", '42P01', dropTable('auctions'))
+            await tryOrSkipOn("Dropping 'blocks' table", '42P01', dropTable('blocks'))
             await tryOrSkipOn("Deleting `namebase-stats` role", '42704', dropServiceUser)
         }
 
         if (!argv.nocreate) {
             await tryOrSkipOn("Creating 'namebase-stats' role", '42710', createServiceUser)
             await tryOrSkipOn("Creating 'blocks' table", '42P07', createBlocksTable)
-            await tryOrSkipOn("Granting access 'blocks'", '', grantBlocksAccess)
+            await tryOrSkipOn("Creating 'auctions' table", '42P07', createAuctionsTable)
+            await tryOrSkipOn("Granting access to 'namebase-stats''", '', grantAccess)
+
         }
     }
     catch (e) {
