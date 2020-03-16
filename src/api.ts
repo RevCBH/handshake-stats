@@ -63,10 +63,10 @@ export function init(query: Query): Express {
         .get('/block-stats/:hashOrNumber', handleErrors(async (req, res) => {
             let blockId = req.params.hashOrNumber
             if (Number.isNaN(Number(blockId))) {
-                console.log('namebase-stats attempting to get by hash')
+                console.log('handshake-stats attempting to get by hash')
                 res.send(await query.getBlockStatsByHash(blockId))
             } else {
-                console.log('namebase-stats attempting to get by number')
+                console.log('handshake-stats attempting to get by number')
                 res.send(await query.getBlockStatsByHeight(Number(blockId)))
             }
 

@@ -25,8 +25,8 @@ class Plugin extends EventEmitter {
         this.chain = node.get('chain')
 
         // TODO - figure out why logger output isn't working
-        console.log('namebase-stats connecting to: %s', node.network)
-        // this.logger.error(`namebase-stats connecting to: ${node.network}`)
+        console.log('handshake-stats connecting to: %s', node.network)
+        // this.logger.error(`handshake-stats connecting to: ${node.network}`)
 
         this.db = db.init()
     }
@@ -41,16 +41,16 @@ class Plugin extends EventEmitter {
         // let prevBlock = await this.chain.getBlock(block.prevBlock)
         // if (prevBlock != null) {
         //     if (!await this.db.blockExists(prevBlock.hashHex())) {
-        //         console.log(`namebase-stats: Inserting missing block ${block.hashHex()}`)
+        //         console.log(`handshake-stats: Inserting missing block ${block.hashHex()}`)
         //         setImmediate(() => this.insertBlock(prevBlock).catch(e => {
-        //             this.emit('error', `namebase-stats: Failed to insert block ${block.hashHex()}`)
-        //             console.error(`namebase-stats: Failed to insert block ${block.hashHex()}`)
+        //             this.emit('error', `handshake-stats: Failed to insert block ${block.hashHex()}`)
+        //             console.error(`handshake-stats: Failed to insert block ${block.hashHex()}`)
         //             console.error(e)
         //         }))
         //     }
         // }
 
-        console.log(`namebase-stats: Inserted block ${block.hashHex()}`)
+        console.log(`handshake-stats: Inserted block ${block.hashHex()}`)
     }
 
     async basicBlockStats(block: hsd.Block): Promise<api.BlockStats> {
@@ -96,12 +96,12 @@ class Plugin extends EventEmitter {
     }
 
     async open() {
-        console.log('namebase-stats open called')
+        console.log('handshake-stats open called')
 
         this.chain.on('block', (block: hsd.Block) => {
-            console.log('namebase-stats got block', block.hashHex(), 'at time', block.time)
+            console.log('handshake-stats got block', block.hashHex(), 'at time', block.time)
             this.insertBlock(block).catch(e => {
-                console.error(`namebase-stats: Failed to insert block ${block.hashHex()}`)
+                console.error(`handshake-stats: Failed to insert block ${block.hashHex()}`)
                 console.error(e)
             })
         })
@@ -116,7 +116,7 @@ class Plugin extends EventEmitter {
     }
 }
 
-export const id = 'namebase-stats'
+export const id = 'handshake-stats'
 
 export function init(node: hsd.Node) {
     return new Plugin(node);

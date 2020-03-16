@@ -46,16 +46,16 @@ CREATE INDEX ON auctions (fromblock);
 function dropTable(name: string): string { return `DROP TABLE "${name}";` }
 
 const createServiceUser = `
-CREATE ROLE "namebase-stats" NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT LOGIN PASSWORD 'test123';
+CREATE ROLE "handshake-stats" NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT LOGIN PASSWORD 'test123';
 `
 
 const dropServiceUser = `
-DROP ROLE "namebase-stats";`
+DROP ROLE "handshake-stats";`
 
 // TODO - narrow privileges?
 const grantAccess = `
-GRANT ALL PRIVILEGES ON blocks TO "namebase-stats";
-GRANT ALL PRIVILEGES ON auctions TO "namebase-stats";
+GRANT ALL PRIVILEGES ON blocks TO "handshake-stats";
+GRANT ALL PRIVILEGES ON auctions TO "handshake-stats";
 `
 
 const OK = chalk.greenBright("OK")
@@ -95,14 +95,14 @@ async function main() {
         if (argv.drop) {
             await tryOrSkipOn("Dropping 'auctions' table", '42P01', dropTable('auctions'))
             await tryOrSkipOn("Dropping 'blocks' table", '42P01', dropTable('blocks'))
-            await tryOrSkipOn("Deleting `namebase-stats` role", '42704', dropServiceUser)
+            await tryOrSkipOn("Deleting `handshake-stats` role", '42704', dropServiceUser)
         }
 
         if (!argv.nocreate) {
-            await tryOrSkipOn("Creating 'namebase-stats' role", '42710', createServiceUser)
+            await tryOrSkipOn("Creating 'handshake-stats' role", '42710', createServiceUser)
             await tryOrSkipOn("Creating 'blocks' table", '42P07', createBlocksTable)
             await tryOrSkipOn("Creating 'auctions' table", '42P07', createAuctionsTable)
-            await tryOrSkipOn("Granting access to 'namebase-stats''", '', grantAccess)
+            await tryOrSkipOn("Granting access to 'handshake-stats'", '', grantAccess)
 
         }
     }

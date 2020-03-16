@@ -25,7 +25,7 @@ class DbRunner implements Client {
     constructor() {
         this.blockQueue = []
         this.insertExecutor = null
-        this.pool = createPool('postgres://namebase-stats:test123@localhost/postgres')
+        this.pool = createPool('postgres://handshake-stats:test123@localhost/postgres')
     }
 
     // This burns through the queue until it's empty
@@ -128,7 +128,7 @@ async function insertBlockStats(pool: DatabasePoolType, blockStats: api.BlockSta
             blockStats.numrunning -= expiring.numopens
         }
         blockStats.numrunning += blockStats.numopens
-        console.log(`namebase-stats numrunning at ${blockStats.height}:`, blockStats.numrunning)
+        console.log(`handshake-stats numrunning at ${blockStats.height}:`, blockStats.numrunning)
 
         // Insert the full
         try {
@@ -149,7 +149,7 @@ async function insertBlockStats(pool: DatabasePoolType, blockStats: api.BlockSta
         `)
         }
         catch (e) {
-            console.log("namebase-stats error inserting:", e)
+            console.log("handshake-stats error inserting:", e)
         }
     })
 }
