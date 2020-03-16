@@ -38,6 +38,12 @@ export interface Query {
     getBlockStatsByHash: (hash: string) => Promise<BlockStats>
 }
 
+function headersMiddleware(req: express.Request, res: express.Response, next: Function) {
+    res.contentType('application/json')
+    res.setHeader('Access-Control-Allow-Origin', '*')
+    next()
+}
+
 export function init(query: Query): Express {
     function handleErrors(handler: express.RequestHandler): express.RequestHandler {
         return (req, res, next) => {
@@ -46,8 +52,8 @@ export function init(query: Query): Express {
     }
 
     return express()
+        .use(headersMiddleware)
         .get('/timeseries/:series/:operation', handleErrors(async (req, res) => {
-            res.contentType('application/json')
             res.send(await query.timeseries({
                 series: req.params.series,
                 operation: req.params.operation,
@@ -55,8 +61,6 @@ export function init(query: Query): Express {
             }))
         }))
         .get('/block-stats/:hashOrNumber', handleErrors(async (req, res) => {
-            res.contentType('application/json')
-
             let blockId = req.params.hashOrNumber
             if (Number.isNaN(Number(blockId))) {
                 console.log('namebase-stats attempting to get by hash')

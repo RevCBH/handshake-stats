@@ -161,6 +161,9 @@ async function timeseries(connection: DatabasePoolConnectionType, params: api.Ti
         case 'issuance':
             series = sql`issuance - fees`
             break
+        case 'fees':
+            series = sql`fees`
+            break
         case 'num-airdrops':
             series = sql`numAirdrops`
             break
