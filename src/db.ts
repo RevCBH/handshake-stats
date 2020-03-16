@@ -1,5 +1,6 @@
 import * as api from './api'
-import { sql, DatabasePoolConnectionType, createPool, DatabasePoolType } from 'slonik';
+import { sql, DatabasePoolConnectionType, createPool, DatabasePoolType } from 'slonik'
+import { LoggerContext } from './hsd_types'
 
 export interface OpenStats {
     name: string
@@ -21,8 +22,10 @@ class DbRunner implements Client {
     // to ensure ordered insertion, we work off a queue
     blockQueue: api.BlockStats[]
     insertExecutor: Promise<void> | null
+    logger: LoggerContext
 
-    constructor() {
+    constructor(logger: LoggerContext) {
+        this.logger = logger
         this.blockQueue = []
         this.insertExecutor = null
         this.pool = createPool('postgres://handshake-stats:test123@localhost/postgres')
@@ -32,7 +35,7 @@ class DbRunner implements Client {
     private async startWork(): Promise<void> {
         var item: api.BlockStats | undefined
         while (item = this.blockQueue.shift()) {
-            await insertBlockStats(this.pool, item)
+            await insertBlockStats(this.pool, this.logger, item)
         }
         this.insertExecutor = null
     }
@@ -103,11 +106,11 @@ class DbRunner implements Client {
     }
 }
 
-export function init(): Client {
-    return new DbRunner();
+export function init(logger: LoggerContext): Client {
+    return new DbRunner(logger);
 }
 
-async function insertBlockStats(pool: DatabasePoolType, blockStats: api.BlockStats): Promise<void> {
+async function insertBlockStats(pool: DatabasePoolType, logger: LoggerContext, blockStats: api.BlockStats): Promise<void> {
     await pool.transaction(async txConnection => {
         // Calculate running auctions at this block
         // TODO - consider doing this from chain data instead?
@@ -128,7 +131,6 @@ async function insertBlockStats(pool: DatabasePoolType, blockStats: api.BlockSta
             blockStats.numrunning -= expiring.numopens
         }
         blockStats.numrunning += blockStats.numopens
-        console.log(`handshake-stats numrunning at ${blockStats.height}:`, blockStats.numrunning)
 
         // Insert the full
         try {
@@ -147,9 +149,11 @@ async function insertBlockStats(pool: DatabasePoolType, blockStats: api.BlockSta
                 ${blockStats.numrunning}
             )
         `)
+
+            logger.info('Inserted block', blockStats.hash)
         }
         catch (e) {
-            console.log("handshake-stats error inserting:", e)
+            logger.error("error inserting block:", e)
         }
     })
 }

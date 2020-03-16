@@ -1,6 +1,7 @@
 'use strict';
 
 import express, { Express } from 'express'
+import { LoggerContext } from './hsd_types'
 
 export interface BlockStats {
     hash: string
@@ -44,7 +45,7 @@ function headersMiddleware(req: express.Request, res: express.Response, next: Fu
     next()
 }
 
-export function init(query: Query): Express {
+export function init(logger: LoggerContext, query: Query): Express {
     function handleErrors(handler: express.RequestHandler): express.RequestHandler {
         return (req, res, next) => {
             handler(req, res, next).catch(next)
@@ -63,10 +64,10 @@ export function init(query: Query): Express {
         .get('/block-stats/:hashOrNumber', handleErrors(async (req, res) => {
             let blockId = req.params.hashOrNumber
             if (Number.isNaN(Number(blockId))) {
-                console.log('handshake-stats attempting to get by hash')
+                logger.debug('getting block stats for hash', blockId)
                 res.send(await query.getBlockStatsByHash(blockId))
             } else {
-                console.log('handshake-stats attempting to get by number')
+                logger.debug('getting block stats at height', blockId)
                 res.send(await query.getBlockStatsByHeight(Number(blockId)))
             }
 

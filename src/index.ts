@@ -24,33 +24,13 @@ class Plugin extends EventEmitter {
         this.logger = node.logger.context("stats")
         this.chain = node.get('chain')
 
-        // TODO - figure out why logger output isn't working
-        console.log('handshake-stats connecting to: %s', node.network)
-        // this.logger.error(`handshake-stats connecting to: ${node.network}`)
-
-        this.db = db.init()
+        this.db = db.init(this.logger)
     }
 
-    async insertBlock(block: hsd.Block) {
+    async insertBlock(block: hsd.Block): Promise<void> {
         let stats = await this.getBlockStats(block)
         this.db.insertBlockStats(stats)
-
-        // TODO - this ends up being a mess w/ the block ingest queue and
-        //        computations that depend on previous results. We need to
-        //        support a rescan operation, probably
-        // let prevBlock = await this.chain.getBlock(block.prevBlock)
-        // if (prevBlock != null) {
-        //     if (!await this.db.blockExists(prevBlock.hashHex())) {
-        //         console.log(`handshake-stats: Inserting missing block ${block.hashHex()}`)
-        //         setImmediate(() => this.insertBlock(prevBlock).catch(e => {
-        //             this.emit('error', `handshake-stats: Failed to insert block ${block.hashHex()}`)
-        //             console.error(`handshake-stats: Failed to insert block ${block.hashHex()}`)
-        //             console.error(e)
-        //         }))
-        //     }
-        // }
-
-        console.log(`handshake-stats: Inserted block ${block.hashHex()}`)
+        this.logger.debug('Queued block for insertion', block.hashHex())
     }
 
     async basicBlockStats(block: hsd.Block): Promise<api.BlockStats> {
@@ -96,18 +76,18 @@ class Plugin extends EventEmitter {
     }
 
     async open() {
-        console.log('handshake-stats open called')
+        this.logger.debug('open called')
 
         this.chain.on('block', (block: hsd.Block) => {
-            console.log('handshake-stats got block', block.hashHex(), 'at time', block.time)
+            this.logger.info('got block', block.hashHex(), 'at time', block.time)
             this.insertBlock(block).catch(e => {
-                console.error(`handshake-stats: Failed to insert block ${block.hashHex()}`)
+                this.logger.error('Failed to queue block for insert', block.hashHex())
                 console.error(e)
             })
         })
 
         // TODO - make port configurable
-        this.httpServer = api.init(this.db).listen(8080)
+        this.httpServer = api.init(this.logger, this.db).listen(8080)
     }
 
     async close() {
