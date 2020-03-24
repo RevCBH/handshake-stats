@@ -1,12 +1,12 @@
 'use strict';
 
-import * as pg from 'pg'
 import assert from 'assert'
 import * as api from './api'
 import * as hsd from './hsd_types'
 import { EventEmitter } from 'events';
 import * as http from 'http'
 import * as db from './db'
+import { connect } from 'http2';
 const consensus = require("hsd/lib/protocol/consensus")
 
 class Plugin extends EventEmitter {
@@ -14,6 +14,7 @@ class Plugin extends EventEmitter {
     db: db.Client
     node: hsd.Node
     chain: hsd.Chain
+    config: hsd.Config
     httpServer: http.Server | undefined
 
     constructor(node: hsd.Node) {
@@ -22,9 +23,13 @@ class Plugin extends EventEmitter {
         this.node = node
         assert(typeof node.logger === 'object')
         this.logger = node.logger.context("stats")
+        this.config = node.config.filter("stats")
         this.chain = node.get('chain')
 
-        this.db = db.init(this.logger)
+        this.db = db.init({
+            logger: this.logger,
+            connectionString: this.config.str('connection-string', 'postgres://handshake-stats:test123@localhost/postgres')
+        })
     }
 
     async insertBlock(block: hsd.Block): Promise<void> {
@@ -86,8 +91,7 @@ class Plugin extends EventEmitter {
             })
         })
 
-        // TODO - make port configurable
-        this.httpServer = api.init(this.logger, this.db).listen(8080)
+        this.httpServer = api.init(this.logger, this.db).listen(this.config.uint('port', 8080))
     }
 
     async close() {

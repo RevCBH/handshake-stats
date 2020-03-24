@@ -24,11 +24,11 @@ class DbRunner implements Client {
     insertExecutor: Promise<void> | null
     logger: LoggerContext
 
-    constructor(logger: LoggerContext) {
+    constructor(logger: LoggerContext, connectionString: string) {
         this.logger = logger
         this.blockQueue = []
         this.insertExecutor = null
-        this.pool = createPool('postgres://handshake-stats:test123@localhost/postgres')
+        this.pool = createPool(connectionString)
     }
 
     // This burns through the queue until it's empty
@@ -106,8 +106,9 @@ class DbRunner implements Client {
     }
 }
 
-export function init(logger: LoggerContext): Client {
-    return new DbRunner(logger);
+type InitParams = { logger: LoggerContext, connectionString: string }
+export function init({ logger, connectionString }: InitParams): Client {
+    return new DbRunner(logger, connectionString);
 }
 
 async function insertBlockStats(pool: DatabasePoolType, logger: LoggerContext, blockStats: api.BlockStats): Promise<void> {

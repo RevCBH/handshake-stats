@@ -6,12 +6,15 @@ The plugin isn't published to npm yet, so to use it, first clone this repository
 
 ```bash
 npm install
-npm link handshake-stats
+npm link
 ```
+
+If `npm install` fails, you might have to install libpq. The [npm package](https://www.npmjs.com/package/libpq#install) has details.
 
 Then, in the HSD directory, run:
 
 ```bash
+npm link handshake-stats
 npm install handshake-stats
 ```
 
@@ -40,6 +43,21 @@ To start the handshake daemon with this plugin, add the flag
 ```
 
 This will start an HTTP API endpoint on `localhost:8080`.
+
+## Config
+
+The following flags are available:
+
+* Use `--stats-connection-string` to provide a database connection string. It defaults to 
+* Use `--stats-port` to change the API port
+
+The `--db-connection-string` option can also be passed to `npm run init-db`. In addition, it supports:
+* `--service-user` to configure the username the plugin will connect to the database with
+* `--service-password` to configure the service user's password
+```bash
+npm run init-db -- --stats-connection-string='postgres://someuser:password@somehost:port/somedatabase'
+```
+`npm run init-db` requires privilges to create roles and tables.
 
 ### API Spec
 #### `GET /timeseries/:series/:operation?bucketSize=:bucket-size`

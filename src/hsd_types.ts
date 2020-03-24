@@ -15,8 +15,17 @@ export interface LoggerContext {
 export interface Node {
     logger: Logger
     network: Network
+    config: Config
     get: (propname: 'chain') => Chain
     on: (msg: string, cb: Function) => void
+}
+
+
+export interface Config {
+    filter: (name: string) => Config
+    open: (file: string) => void
+    str: (key: string, fallback: string) => string
+    uint: (key: string, fallback: number) => number
 }
 
 export interface Network {

@@ -2,10 +2,15 @@
   "name": "handshake-stats",
   "version": "1.0.0",
   "description": "",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/RevCBH/handshake-stats.git"
+  },
   "main": "lib/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",
+    "setup-dev": "npm run docker-pull-db && npm run docker-run-db && npm run init-db",
     "init-db": "ts-node script/init_db.ts",
     "docker-pull-db": "docker pull timescale/timescaledb:latest-pg11",
     "docker-run-db": "docker run -d --name timescaledb -p 5432:5432 -e POSTGRES_PASSWORD=test123 timescale/timescaledb:latest-pg11",
