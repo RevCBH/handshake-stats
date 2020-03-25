@@ -8,24 +8,31 @@
   },
   "main": "lib/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "jest --detectOpenHandles",
     "build": "tsc",
     "setup-dev": "npm run docker-pull-db && npm run docker-run-db && npm run init-db",
     "init-db": "ts-node script/init_db.ts",
     "docker-pull-db": "docker pull timescale/timescaledb:latest-pg11",
     "docker-run-db": "docker run -d --name timescaledb -p 5432:5432 -e POSTGRES_PASSWORD=test123 timescale/timescaledb:latest-pg11",
-    "docker-psql": "docker exec -it timescaledb psql -h localhost -U postgres"
+    "docker-psql": "docker exec -it timescaledb psql -h localhost -U postgres",
+    "ts-node": "ts-node"
   },
   "keywords": [],
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "ts-node": "^8.6.2",
-    "typescript": "^3.8.3",
     "@types/express": "^4.17.3",
+    "@types/jest": "^25.1.4",
     "@types/node": "^13.9.0",
     "@types/pg": "^7.14.1",
-    "@types/slonik": "^22.1.1"
+    "@types/slonik": "^22.1.1",
+    "jest": "^25.1.0",
+    "jest-ts-auto-mock": "^1.0.11",
+    "ts-auto-mock": "^1.5.7",
+    "ts-jest": "^25.2.1",
+    "ts-node": "^8.6.2",
+    "ttypescript": "^1.5.10",
+    "typescript": "^3.8.3"
   },
   "dependencies": {
     "blgr": "^0.1.7",
@@ -36,5 +43,18 @@
     "pg-native": "^3.0.0",
     "slonik": "^22.4.3",
     "yargs": "^15.3.0"
+  },
+  "jest": {
+    "setupFiles": [
+      "<rootDir>config.ts"
+    ],
+    "transform": {
+      ".(ts|tsx)": "ts-jest"
+    },
+    "globals": {
+      "ts-jest": {
+        "compiler": "ttypescript"
+      }
+    }
   }
 }

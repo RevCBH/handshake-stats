@@ -36,6 +36,7 @@ CREATE TABLE blocks (
     time            timestamp without time zone not null,
     hash            char(64) not null,
     prevhash        char(64) not null,
+    onwinningchain  boolean not null,
     height          bigint not null,
     issuance        bigint not null,
     fees            bigint not null,

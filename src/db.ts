@@ -10,9 +10,18 @@ export interface OpenStats {
 export const NUM_BLOCKS_AUCTION_IS_OPEN = 37 + 720 + 1440 // opening, bidding, revealing
 
 export interface Client extends api.Query {
-    insertBlockStats: (blockStats: api.BlockStats) => void
-    blockExists: (blockHash: string) => Promise<boolean>
-    close: () => Promise<void>
+    insertBlockStats(blockStats: api.BlockStats): void
+    blockExists(blockHash: string): Promise<boolean>
+    close(): Promise<void>
+}
+
+export class MissingBlockError extends Error {
+    constructor(message: string) {
+        super(message)
+
+        Object.setPrototypeOf(this, new.target.prototype)
+        this.name = MissingBlockError.name
+    }
 }
 
 // type DbFunc<TArgs, TResult> = (connection: DatabasePoolConnectionType, args: TArgs) => Promise<TResult>
@@ -70,7 +79,7 @@ class DbRunner implements Client {
                 return maybeStats
             }
             else {
-                throw new Error(`No block at height: ${height}`)
+                throw new MissingBlockError(`No block at height: ${height}`)
             }
         })
     }
@@ -86,7 +95,7 @@ class DbRunner implements Client {
                 return maybeStats
             }
             else {
-                throw new Error(`No block at hash: ${hash}`)
+                throw new MissingBlockError(`No block at hash: ${hash}`)
             }
         })
     }
@@ -116,15 +125,19 @@ async function insertBlockStats(pool: DatabasePoolType, logger: LoggerContext, b
         // Calculate running auctions at this block
         // TODO - consider doing this from chain data instead?
         // TODO - combine these two queries? Do the math in SQL?
-        let lastNumRunning = await txConnection.maybeOne<{ numrunning: number }>(sql`
-            SELECT numrunning FROM blocks WHERE height = ${blockStats.height} - 1;
+        let lastBlock = await txConnection.maybeOne<
+            { numrunning: number, onwinningchain: boolean }
+        >(sql`
+            SELECT numrunning, onwinningchain
+            FROM blocks WHERE height = ${blockStats.height} - 1;
         `)
         let expiring = await txConnection.maybeOne<{ numopens: number }>(sql`
             SELECT numopens FROM blocks WHERE height = ${blockStats.height - NUM_BLOCKS_AUCTION_IS_OPEN};
         `)
 
-        if (lastNumRunning != null) {
-            blockStats.numrunning = lastNumRunning.numrunning;
+        if (lastBlock != null) {
+            blockStats.numrunning = lastBlock.numrunning;
+            blockStats.onwinningchain = lastBlock.onwinningchain;
         }
 
         if (expiring != null) {
@@ -136,10 +149,13 @@ async function insertBlockStats(pool: DatabasePoolType, logger: LoggerContext, b
         // Insert the full
         try {
             await txConnection.query(sql`
-            INSERT INTO blocks (hash, prevHash, time, height, issuance, fees, numAirdrops, airdropAmt, numopens, numrunning)
-            VALUES (
+            INSERT INTO blocks (
+                hash, prevHash, onwinningchain, time, height, issuance, 
+                fees, numAirdrops, airdropAmt, numopens, numrunning
+            ) VALUES (
                 ${blockStats.hash},
                 ${blockStats.prevhash},
+                ${blockStats.onwinningchain},
                 to_timestamp(${blockStats.time}),
                 ${blockStats.height},
                 ${blockStats.issuance},

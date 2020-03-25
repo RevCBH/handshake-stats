@@ -3,9 +3,17 @@
 import express, { Express } from 'express'
 import { LoggerContext } from './hsd_types'
 
+
+export interface Query {
+    timeseries(options: TimeseriesParams): Promise<Bucket[]>
+    getBlockStatsByHeight(height: number): Promise<BlockStats>
+    getBlockStatsByHash(hash: string): Promise<BlockStats>
+}
+
 export interface BlockStats {
     hash: string
     prevhash: string
+    onwinningchain: boolean
     time: number
     height: number
     issuance: number
@@ -31,12 +39,6 @@ export interface TimeseriesParams {
     series: string
     operation: string
     bucketSize: string
-}
-
-export interface Query {
-    timeseries: (options: TimeseriesParams) => Promise<Bucket[]>
-    getBlockStatsByHeight: (height: number) => Promise<BlockStats>
-    getBlockStatsByHash: (hash: string) => Promise<BlockStats>
 }
 
 function headersMiddleware(req: express.Request, res: express.Response, next: Function) {
