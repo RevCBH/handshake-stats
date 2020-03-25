@@ -76,36 +76,57 @@ export class Plugin extends EventEmitter {
     }
 
     async open() {
-        this.logger.debug('open called')
+        await this.catchUpWithChain()
 
-        const genesisEntry = await this.chain.getEntryByHeight(0)
-        const genesisHash = genesisEntry.hash.toString('hex')
-        try {
-            await this.db.getBlockStatsByHash(genesisHash)
-        } catch (err) {
-            if (err instanceof db.MissingBlockError) {
-                await this.handleNewBlock(
-                    await this.chain.getBlock(genesisEntry.hash),
-                    genesisEntry
-                )
-            }
-            else {
-                throw err
-            }
-        }
-
+        // TODO - track the created promises and ensure that we don't
+        //        exit before handling them, if possible
         this.chain.on('block', this.handleNewBlock.bind(this))
 
         this.httpServer = api.init(this.logger, this.db).listen(this.config.uint('port', 8080))
     }
 
+    /* The plan - check our DB's chain height vs the node's chain height.
+     * If we're behind, catch up, and queue incoming blocks. In theory, this
+     * let's us blow away the DB and rebuild from scratch. It's more practically
+     * useful if the sync gets interrupted on the first run.
+     */
+    async catchUpWithChain(): Promise<void> {
+        const dbChainHeight = await this.db.getChainHeight()
+        const nodeChainHeight = this.chain.height
+
+        if (dbChainHeight < nodeChainHeight) {
+            this.logger.info(`DB is ${nodeChainHeight - dbChainHeight} blocks behind. Catching up.`)
+            // TODO - track the created promises and ensure that we don't
+            //        exit before handling them, if possible
+            const inboundQueue: api.BlockStats[] = []
+            const pushItem = async (block: hsd.Block) => {
+                let stats = await this.calcBlockStats(block)
+                inboundQueue.push(stats)
+            }
+            this.chain.on('block', pushItem)
+
+            for (let i = dbChainHeight + 1; i < nodeChainHeight; i++) {
+                const entry = await this.chain.getEntryByHeight(i)
+                const block = await this.chain.getBlock(entry.hash)
+                const stats = await this.calcBlockStats(block)
+                this.db.insertBlockStats(stats)
+            }
+
+            this.chain.removeListener('block', pushItem)
+            inboundQueue.forEach(stats => this.db.insertBlockStats(stats))
+        }
+    }
+
     async handleNewBlock(block: hsd.Block, entry: hsd.ChainEntry): Promise<void> {
         this.logger.info('got block', block.hashHex(), 'at time', block.time)
+
         try {
-            let stats = await this.calcBlockStats(block)
-            stats.onwinningchain = entry.height === 0 // the genesis block is always on the winning chain
+            const previousBlockFound = await this.db.blockExists(block.prevBlock.toString('hex'))
+            if (!previousBlockFound) {
+                await this.catchUpWithChain()
+            }
+            const stats = await this.calcBlockStats(block)
             this.db.insertBlockStats(stats)
-            this.logger.debug('Queued block for insertion', block.hashHex())
         } catch (e) {
             this.logger.error('Failed to queue block for insert', block.hashHex())
             console.error(e)

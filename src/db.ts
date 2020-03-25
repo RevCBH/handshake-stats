@@ -12,6 +12,7 @@ export const NUM_BLOCKS_AUCTION_IS_OPEN = 37 + 720 + 1440 // opening, bidding, r
 export interface Client extends api.Query {
     insertBlockStats(blockStats: api.BlockStats): void
     blockExists(blockHash: string): Promise<boolean>
+    getChainHeight(): Promise<number>
     close(): Promise<void>
 }
 
@@ -62,6 +63,20 @@ class DbRunner implements Client {
         })
     }
 
+    async getChainHeight(): Promise<number> {
+        return this.pool.connect(async connection => {
+            const result = await connection.maybeOne<{ chainheight: number }>(sql`
+                SELECT max(height) AS chainheight FROM blocks
+                WHERE onwinningchain = true;
+            `)
+            if (result?.chainheight != null) {
+                return result.chainheight
+            } else {
+                return -1
+            }
+        })
+    }
+
     async timeseries(params: api.TimeseriesParams) {
         return this.pool.connect(async connection => {
             return await timeseries(connection, params)
@@ -107,6 +122,7 @@ class DbRunner implements Client {
 
         // Queue a block to insert 
         this.blockQueue.push(blockStats)
+        this.logger.spam('Queued block for insertion', blockStats.hash)
 
         // If we're not currently pulling from the queue, start
         if (this.insertExecutor === null) {
@@ -138,6 +154,8 @@ async function insertBlockStats(pool: DatabasePoolType, logger: LoggerContext, b
         if (lastBlock != null) {
             blockStats.numrunning = lastBlock.numrunning;
             blockStats.onwinningchain = lastBlock.onwinningchain;
+        } else if (blockStats.height === 0) {
+            blockStats.onwinningchain = true; // The genesis block is always winning
         }
 
         if (expiring != null) {

@@ -70,10 +70,15 @@ export interface Covenant {
 export interface Chain {
     on(msg: 'block', handler: (block: Block, entry: ChainEntry) => void): void
     on(msg: 'tip', handler: (entry: ChainEntry) => void): void
+    removeListener(msg: 'block', handler: (block: Block, entry: ChainEntry) => void): void
+
     getBlock(hash: Hash): Promise<Block>
     getBlockView: (block: Block) => Promise<CoinView>
     getEntryByHeight: (height: number) => Promise<ChainEntry>
     getHeight: (block: Hash) => number
+
+    tip: ChainEntry
+    height: number
 }
 
 export interface CoinView { }
