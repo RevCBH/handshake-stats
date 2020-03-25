@@ -43,18 +43,5 @@
     "pg-native": "^3.0.0",
     "slonik": "^22.4.3",
     "yargs": "^15.3.0"
-  },
-  "jest": {
-    "setupFiles": [
-      "<rootDir>config.ts"
-    ],
-    "transform": {
-      ".(ts|tsx)": "ts-jest"
-    },
-    "globals": {
-      "ts-jest": {
-        "compiler": "ttypescript"
-      }
-    }
   }
 }
