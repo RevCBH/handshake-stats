@@ -73,12 +73,18 @@ export interface Chain {
     removeListener(msg: 'block', handler: (block: Block, entry: ChainEntry) => void): void
 
     getBlock(hash: Hash): Promise<Block>
-    getBlockView: (block: Block) => Promise<CoinView>
-    getEntryByHeight: (height: number) => Promise<ChainEntry>
-    getHeight: (block: Hash) => number
+    getBlockView(block: Block): Promise<CoinView>
+    getEntryByHeight(height: number): Promise<ChainEntry>
+    getEntry(hash: Buffer): Promise<ChainEntry>
+    getEntry(height: number): Promise<ChainEntry>
+    getHeight(block: Hash): number
+    getPrevious(entry: ChainEntry): Promise<ChainEntry>
 
     tip: ChainEntry
     height: number
+
+    // TODO - this is @private in hsd! Find another way
+    findFork(fork: ChainEntry, longer: ChainEntry): Promise<ChainEntry>
 }
 
 export interface CoinView { }

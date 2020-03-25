@@ -121,16 +121,71 @@ export class Plugin extends EventEmitter {
         this.logger.info('got block', block.hashHex(), 'at time', block.time)
 
         try {
-            const previousBlockFound = await this.db.blockExists(block.prevBlock.toString('hex'))
-            if (!previousBlockFound) {
+            const prevHash = block.prevBlock.toString('hex')
+            if (!await this.db.blockExists(prevHash)) {
                 await this.catchUpWithChain()
             }
+
+            const dbTipHash = await this.db.getChainTipHash()
+            if (dbTipHash != prevHash) {
+                await this.reorganize(dbTipHash, prevHash)
+            }
+
             const stats = await this.calcBlockStats(block)
             this.db.insertBlockStats(stats)
         } catch (e) {
             this.logger.error('Failed to queue block for insert', block.hashHex())
             console.error(e)
         }
+    }
+
+    async reorganize(oldTipHash: string, newTipHash: string): Promise<void> {
+        this.logger.warning(`Preparing to handle a reorg from current tip ${oldTipHash} to new tip ${newTipHash}`)
+        const oldTip = await this.chain.getEntry(Buffer.from(oldTipHash, 'hex'))
+        const newTip = await this.chain.getEntry(Buffer.from(newTipHash, 'hex'))
+        const forkPoint = await this.chain.findFork(oldTip, newTip)
+        this.logger.debug("fork point:", forkPoint)
+
+        // Disconnect old blocks on the way down
+        let currentEntry = oldTip;
+        while (!currentEntry.hash.equals(forkPoint.hash)) {
+            let currentHash = currentEntry.hash.toString('hex')
+            this.logger.debug("disconnecting block at:", currentHash)
+            await this.db.disconnectBlock(currentHash)
+            this.logger.debug("disconnect successful")
+            currentEntry = await this.chain.getPrevious(currentEntry)
+        }
+        this.logger.debug("disconnects complete")
+
+        // Find all the new blocks
+        const toConnect = []
+        currentEntry = newTip;
+        while (!currentEntry.hash.equals(forkPoint.hash)) {
+            toConnect.push(currentEntry)
+            currentEntry = await this.chain.getPrevious(currentEntry)
+        }
+        this.logger.debug("finished scanning blocks to connect")
+
+        // Connect or insert them on the way up (so they're connected)
+        while (toConnect.length > 0) {
+            const next = toConnect.pop()
+            if (next) {
+                const nextHash = next.hash.toString('hex')
+                if (await this.db.blockExists(nextHash)) {
+                    await this.db.connectBlock(nextHash)
+                } else {
+                    const nextBlock = await this.chain.getBlock(Buffer.from(nextHash, 'hex'))
+                    const stats = await this.calcBlockStats(nextBlock)
+                    this.db.insertBlockStats(stats)
+                }
+            }
+        }
+
+        this.logger.info("Reorg complete")
+    }
+
+    async handleDisconnect(entry: hsd.ChainEntry): Promise<void> {
+        this.db.disconnectBlock(entry.hash.toString('hex'))
     }
 
     async close() {

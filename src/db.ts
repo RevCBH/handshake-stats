@@ -13,6 +13,9 @@ export interface Client extends api.Query {
     insertBlockStats(blockStats: api.BlockStats): void
     blockExists(blockHash: string): Promise<boolean>
     getChainHeight(): Promise<number>
+    disconnectBlock(blockHash: string): Promise<void>
+    connectBlock(blockHash: string): Promise<void>
+    getChainTipHash(): Promise<string>
     close(): Promise<void>
 }
 
@@ -74,6 +77,39 @@ class DbRunner implements Client {
             } else {
                 return -1
             }
+        })
+    }
+
+    async getChainTipHash(): Promise<string> {
+        return this.pool.connect(async connection => {
+            const result = await connection.maybeOne<{ hash: string }>(sql`
+                SELECT hash FROM blocks
+                WHERE height = (SELECT MAX(height) FROM blocks) 
+                AND   onwinningchain = true;
+            `)
+            if (result?.hash != null) {
+                return result.hash
+            } else {
+                throw new MissingBlockError("No chain tip found")
+            }
+        })
+    }
+
+    async connectBlock(blockHash: string): Promise<void> {
+        await this.setBlockWinning(blockHash, true)
+    }
+
+    async disconnectBlock(blockHash: string): Promise<void> {
+        await this.setBlockWinning(blockHash, false)
+    }
+
+    private async setBlockWinning(blockHash: string, isWinning: boolean): Promise<void> {
+        return this.pool.connect(async connection => {
+            await connection.query(sql`
+                UPDATE blocks
+                SET onwinningchain = ${isWinning}
+                WHERE hash = ${blockHash}
+            `)
         })
     }
 
