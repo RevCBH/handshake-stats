@@ -1,7 +1,7 @@
 'use strict';
 
 import express, { Express } from 'express'
-import { LoggerContext } from './hsd_types'
+import { LoggerContext } from 'blgr'
 
 
 export interface Query {

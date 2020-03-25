@@ -2,7 +2,13 @@
 
 import assert from 'assert'
 import * as api from './api'
-import * as hsd from './hsd_types'
+import { Chain } from 'hsd/lib/blockchain/chain'
+import { ChainEntry } from 'hsd/lib/blockchain/chainentry'
+import { Block } from 'hsd/lib/primitives/block'
+import { Node as HsdNode } from 'hsd/lib/node/node'
+import { LoggerContext } from 'blgr'
+import { Config } from 'bcfg'
+
 import { EventEmitter } from 'events';
 import * as http from 'http'
 import * as db from './db'
@@ -10,14 +16,14 @@ import { connect } from 'http2';
 const consensus = require("hsd/lib/protocol/consensus")
 
 export class Plugin extends EventEmitter {
-    logger: hsd.LoggerContext
+    logger: LoggerContext
     db: db.Client
-    node: hsd.Node
-    chain: hsd.Chain
-    config: hsd.Config
+    node: HsdNode
+    chain: Chain
+    config: Config
     httpServer: http.Server | undefined
 
-    constructor(node: hsd.Node) {
+    constructor(node: HsdNode) {
         super();
 
         this.node = node
@@ -32,7 +38,7 @@ export class Plugin extends EventEmitter {
         })
     }
 
-    async basicBlockStats(block: hsd.Block): Promise<api.BlockStats> {
+    async basicBlockStats(block: Block): Promise<api.BlockStats> {
         let height = await this.chain.getHeight(block.hash())
         return {
             hash: block.hashHex(),
@@ -49,7 +55,7 @@ export class Plugin extends EventEmitter {
         }
     }
 
-    async calcBlockStats(block: hsd.Block): Promise<api.BlockStats> {
+    async calcBlockStats(block: Block): Promise<api.BlockStats> {
         let stats = await this.basicBlockStats(block)
 
         stats.fees =
@@ -99,7 +105,7 @@ export class Plugin extends EventEmitter {
             // TODO - track the created promises and ensure that we don't
             //        exit before handling them, if possible
             const inboundQueue: api.BlockStats[] = []
-            const pushItem = async (block: hsd.Block) => {
+            const pushItem = async (block: Block) => {
                 let stats = await this.calcBlockStats(block)
                 inboundQueue.push(stats)
             }
@@ -117,7 +123,7 @@ export class Plugin extends EventEmitter {
         }
     }
 
-    async handleNewBlock(block: hsd.Block, entry: hsd.ChainEntry): Promise<void> {
+    async handleNewBlock(block: Block, entry: ChainEntry): Promise<void> {
         this.logger.info('got block', block.hashHex(), 'at time', block.time)
 
         try {
@@ -184,7 +190,7 @@ export class Plugin extends EventEmitter {
         this.logger.info("Reorg complete")
     }
 
-    async handleDisconnect(entry: hsd.ChainEntry): Promise<void> {
+    async handleDisconnect(entry: ChainEntry): Promise<void> {
         this.db.disconnectBlock(entry.hash.toString('hex'))
     }
 
@@ -196,6 +202,6 @@ export class Plugin extends EventEmitter {
 
 export const id = 'handshake-stats'
 
-export function init(node: hsd.Node): Plugin {
+export function init(node: HsdNode): Plugin {
     return new Plugin(node);
 }

@@ -1,6 +1,6 @@
 import * as api from './api'
 import { sql, DatabasePoolConnectionType, createPool, DatabasePoolType } from 'slonik'
-import { LoggerContext } from './hsd_types'
+import { LoggerContext } from 'blgr'
 
 export interface OpenStats {
     name: string

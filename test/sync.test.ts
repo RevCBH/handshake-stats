@@ -1,87 +1,56 @@
-// import { mocked } from 'ts-jest/utils'
 import { createMock } from 'ts-auto-mock'
 import { On, method } from 'ts-auto-mock/extension'
 
-// const index = require('../src/index')
 import { init, Plugin } from '../src/index'
-import { init as dbInit, Client as DbClient } from '../src/db'
-// import * as api from '../src/api'
-import * as hsd from '../src/hsd_types'
+import * as db from '../src/db'
 
-jest.mock('../src/db')
-jest.mock('../src/hsd_types')
+import { Chain } from 'hsd/lib/blockchain/chain'
+import { ChainEntry } from 'hsd/lib/blockchain/chainentry'
+import { Block } from 'hsd/lib/primitives/block'
+import { Output } from 'hsd/lib/primitives/output'
+import { TX } from 'hsd/lib/primitives/tx'
+import { Node as HsdNode } from 'hsd/lib/node/node'
 
 describe("When handling sync events", () => {
-    let mockNode: hsd.Node
+    let mockNode: HsdNode
     let plugin: Plugin
-    // let mockDb: DbClient
-    let mockBlock: hsd.Block
-    // let mockChain: hsd.Chain
+    let mockDb: db.Client
+    let mockBlock: Block
+    let mockChain: Chain
 
     beforeEach(() => {
-        // mockChain = createMock<hsd.Chain>()
-        // mockNode = createMock<hsd.Node>()
+        mockChain = createMock<Chain>()
+        mockNode = createMock<HsdNode>({
+            get: jest.fn((key: string) => {
+                if (key === 'chain') {
+                    return mockChain
+                } else {
+                    throw new Error(`Unexpected Node.get key: ${key}`)
+                }
+            })
+        })
 
-        mockNode = {
-            logger: {
-                context: jest.fn(),
-            },
-            network: {
-                halvingInterval: 0
-            },
-            config: {
-                str: (_, fallback) => fallback,
-                filter: jest.fn().mockReturnThis(),
-                open: jest.fn(),
-                uint: jest.fn()
-            },
-            get: jest.fn(),
-            on: jest.fn()
-        }
-
-        mockBlock = createMock<hsd.Block>({
+        mockBlock = createMock<Block>({
             txs: [
-                createMock<hsd.TX>({
-                    outputs: [createMock<hsd.Output>()]
+                createMock<TX>({
+                    outputs: [createMock<Output>()]
                 })
             ]
         })
 
-        // mockDb = createMock<db.Client>()
+        mockDb = createMock<db.Client>()
         plugin = init(mockNode)
-        // plugin.db = mockDb
-        // plugin.chain = mockChain
+        plugin.db = mockDb
     })
-
-    // it('should add the genesis block on startup if missing', async () => {
-    //     const mockGetEntryByHeight = <jest.Mock>On(mockChain).get(method(mock => mock.getEntryByHeight))
-    //     mockGetEntryByHeight.mockResolvedValueOnce(createMock<hsd.ChainEntry>({
-    //             hash: Buffer.from('deadbeef', 'hex')
-    //     }))
-
-    //     const mockGetBlockStatsByHash = <jest.Mock>On(mockDb).get(method(mock => mock.getBlockStatsByHash))
-    //             mockGetBlockStatsByHash.mockRejectedValueOnce(new db.MissingBlockError(""))
-
-    //     const mockGetBlock = <jest.Mock>On(mockChain).get(method(mock => mock.getBlock))
-    //                 mockGetBlock.mockResolvedValue(mockBlock)
-
-    //                 const mockInsertBlockStats = On(mockDb).get(method('insertBlockStats'))
-
-    //                 await plugin.open()
-
-    //                 expect(mockGetBlockStatsByHash).toBeCalledWith('deadbeef')
-    //                 expect(mockInsertBlockStats).toBeCalledTimes(1)
-
-    //                 return plugin.close()
-    //                 })
 
     it('should insert new blocks in the db', async () => {
-        // const MockDb = jest.fn(() => ({}))
-        const mockInsertBlockStats = jest.fn()
-        // await plugin.handleNewBlock()
-        // const mockInsertBlockStats = On(mockDb).get(method('insertBlockStats'))
-
-        // await plugin.handleNewBlock(mockBlock, createMock<hsd.ChainEntry>())
-        // expect(mockInsertBlockStats).toBeCalledTimes(1)
+        const mockInsertBlockStats = On(mockDb).get(method(m => m.insertBlockStats))
+        await plugin.handleNewBlock(mockBlock, createMock<ChainEntry>())
+        expect(mockInsertBlockStats).toBeCalledTimes(1)
     })
+
+    it('should handle a reorganization', async () => {
+
+    })
+
 })
