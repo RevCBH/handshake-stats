@@ -2,10 +2,10 @@
 
 import assert from 'assert'
 import * as api from './api'
-import { Chain } from 'hsd/lib/blockchain/chain'
-import { ChainEntry } from 'hsd/lib/blockchain/chainentry'
-import { Block } from 'hsd/lib/primitives/block'
-import { Node as HsdNode } from 'hsd/lib/node/node'
+import Chain from 'hsd/lib/blockchain/chain'
+import ChainEntry from 'hsd/lib/blockchain/chainentry'
+import Block from 'hsd/lib/primitives/block'
+import Node from 'hsd/lib/node/node'
 import { LoggerContext } from 'blgr'
 import { Config } from 'bcfg'
 
@@ -18,12 +18,12 @@ const consensus = require("hsd/lib/protocol/consensus")
 export class Plugin extends EventEmitter {
     logger: LoggerContext
     db: db.Client
-    node: HsdNode
+    node: Node
     chain: Chain
     config: Config
     httpServer: http.Server | undefined
 
-    constructor(node: HsdNode) {
+    constructor(node: Node) {
         super();
 
         this.node = node
@@ -141,7 +141,7 @@ export class Plugin extends EventEmitter {
             this.db.insertBlockStats(stats)
         } catch (e) {
             this.logger.error('Failed to queue block for insert', block.hashHex())
-            console.error(e)
+            throw e
         }
     }
 
@@ -202,6 +202,6 @@ export class Plugin extends EventEmitter {
 
 export const id = 'handshake-stats'
 
-export function init(node: HsdNode): Plugin {
+export function init(node: Node): Plugin {
     return new Plugin(node);
 }

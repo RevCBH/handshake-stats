@@ -1,6 +1,10 @@
 module.exports = {
   preset: 'ts-jest/presets/js-with-ts',
   testEnvironment: 'node',
+  roots: [
+    "<rootDir>/test",
+    // "<rootDir>/types"
+  ],
   setupFiles: [
     '<rootDir>config.ts'
   ],
