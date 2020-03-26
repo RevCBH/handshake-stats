@@ -224,7 +224,11 @@ async function insertBlockStats(pool: DatabasePoolType, logger: LoggerContext, b
             logger.info('Inserted block', blockStats.hash)
         }
         catch (e) {
-            logger.error("error inserting block:", e)
+            if (e.code === '23505') {
+                logger.warning("block with hash already exists:", blockStats.hash)
+            } else {
+                logger.error("error inserting block:", e.message)
+            }
         }
     })
 }
